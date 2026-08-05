@@ -1,0 +1,75 @@
+#include <zephyr/dt-bindings/pwm/pwm.h>
+#include <zephyr/dt-bindings/clock/kinetis_sim.h>
+
+#include <nxp/kinetis/MKL25Z128VLK4-pinctrl.h>
+
+&gpioe {
+    status = "okay";
+};
+
+&pinctrl {
+    tpm0_default: tpm0_default {
+        group0 {
+            pinmux = <TPM0_CH0_PTD0>;
+            drive-strength = "low";
+            slew-rate = "slow";
+        };
+    };
+    tpm1_default: tpm1_default {
+        group0 {
+            pinmux = <TPM1_CH0_PTE20>;
+            drive-strength = "low";
+            slew-rate = "slow";
+        };
+    };
+};
+
+/ {
+    soc {
+        tpm0: tpm@40038000 {
+            compatible = "nxp,kinetis-tpm";
+            reg = <0x40038000 0x1000>;
+            interrupts = <17 0>; 
+            prescaler = <64>;
+            
+            clocks = <&sim KINETIS_SIM_BUS_CLK 0x103C 24>;
+            
+            pinctrl-0 = <&tpm0_default>;
+            pinctrl-names = "default";
+            #pwm-cells = <3>;
+            status = "okay";
+        };
+        tpm1: tpm@40039000 {
+            compatible = "nxp,kinetis-tpm";
+            reg = <0x40039000 0x1000>;
+            interrupts = <18 1>; 
+            prescaler = <8>;
+            
+            clocks = <&sim KINETIS_SIM_BUS_CLK 0x103C 25>;
+            
+            pinctrl-0 = <&tpm1_default>;
+            pinctrl-names = "default";
+            #pwm-cells = <3>;
+            status = "okay";
+        };
+
+        aliases {
+            tpm1 = &tpm1;
+        };
+    };
+};
+
+/ {
+    aliases {
+        pwm-trigger = &pwm_trigger;
+    };
+
+    pwmtriggers {
+        compatible = "simple-bus";
+
+        pwm_trigger: pwm_trigger {
+            compatible = "my,pwm-trigger";
+            pwms = <&tpm0 0 PWM_MSEC(60) PWM_POLARITY_NORMAL>;
+        };
+    };
+};
