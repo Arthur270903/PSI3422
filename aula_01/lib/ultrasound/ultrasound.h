@@ -25,8 +25,11 @@
 
 #include <tpm_dt.h>
 
+extern void ultrasound_entry_point(void *, void *, void *);
+extern struct k_sem ultrasound_sem;
+
 uint8_t config_sensor();
-void handler_sensor();
-uint32_t sensor_read_distance();
+uint32_t sensor_read_ticks();
+uint32_t sensor_read_distance_cm();
  
 #endif /* ULTRASOUND_H */
