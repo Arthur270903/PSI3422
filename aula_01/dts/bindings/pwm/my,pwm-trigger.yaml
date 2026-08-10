@@ -1,0 +1,9 @@
+description: Generic PWM trigger output
+
+compatible: "my,pwm-trigger"
+
+properties:
+  pwms:
+    type: phandle-array
+    required: true
+    description: PWM output specifier
