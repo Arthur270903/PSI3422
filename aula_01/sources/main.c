@@ -28,6 +28,32 @@ extern void ultrasound_entry_point(void *, void *, void *)
     }
 }
 
+// simple motor control
+// - anda para frente até achar um alvo
+// - se achar um alvo ele para e vira para a direita
+void motor_control_entry_point(void *, void *, void *)
+{
+    if(brdge_h_init())
+        return;
+
+    brdge_h_front();
+
+    while (1) 
+    {   
+        k_sem_take(&target_sem, K_FOREVER);
+        brdge_h_stop();  //
+        k_msleep(1000);  // 
+        brdge_h_right(); //
+        k_msleep(1000);  //
+        brdge_h_stop();  // TOOD: FIX
+    }
+}
+
+
+K_THREAD_DEFINE(motor_control_tid, 512,
+                motor_control_entry_point, NULL, NULL, NULL,
+                0, 0, 0);
+
 // ---
 int main()
 {
