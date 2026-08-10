@@ -2,6 +2,7 @@
 #include <zephyr/device.h>
 
 #include "ultrasound.h"
+#include "bridge_h.h"
 
 #define TARGET_DISTANCE_CM 10 // TODO: test
 

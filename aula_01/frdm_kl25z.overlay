@@ -1,5 +1,6 @@
 #include <zephyr/dt-bindings/pwm/pwm.h>
 #include <zephyr/dt-bindings/clock/kinetis_sim.h>
+#include <zephyr/dt-bindings/gpio/gpio.h>
 
 #include <nxp/kinetis/MKL25Z128VLK4-pinctrl.h>
 
@@ -25,6 +26,48 @@
 };
 
 / {
+    aliases {
+        pwm-trigger = &pwm_trigger;
+    
+        tpm1 = &tpm1;
+        out1 = &out1;
+        out2 = &out2;
+        out3 = &out3;
+        out4 = &out4;
+    };
+
+
+    pins_control {
+        compatible = "gpio-leds";
+
+        out1: pin_out_1 {
+            gpios = <&gpioe 3 GPIO_ACTIVE_HIGH>;
+        
+        };
+
+        out2: pin_out_2 {
+            gpios = <&gpioe 4 GPIO_ACTIVE_HIGH>;
+        };
+
+        out3: pin_out_3 {
+            gpios = <&gpioe 5 GPIO_ACTIVE_HIGH>;
+        };
+
+        out4: pin_out_4 {
+            gpios = <&gpioe 6 GPIO_ACTIVE_HIGH>;
+        };
+        
+    };
+
+    pwmtriggers {
+        compatible = "simple-bus";
+
+        pwm_trigger: pwm_trigger {
+            compatible = "my,pwm-trigger";
+            pwms = <&tpm0 0 PWM_MSEC(60) PWM_POLARITY_NORMAL>;
+        };
+    };
+
     soc {
         tpm0: tpm@40038000 {
             compatible = "nxp,kinetis-tpm";
@@ -51,25 +94,6 @@
             pinctrl-names = "default";
             #pwm-cells = <3>;
             status = "okay";
-        };
-
-        aliases {
-            tpm1 = &tpm1;
-        };
-    };
-};
-
-/ {
-    aliases {
-        pwm-trigger = &pwm_trigger;
-    };
-
-    pwmtriggers {
-        compatible = "simple-bus";
-
-        pwm_trigger: pwm_trigger {
-            compatible = "my,pwm-trigger";
-            pwms = <&tpm0 0 PWM_MSEC(60) PWM_POLARITY_NORMAL>;
         };
     };
 };

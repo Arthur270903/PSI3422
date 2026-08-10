@@ -15,10 +15,12 @@ target_sources(
     sources/main.c
     lib/tpm_dt/tpm_dt.c
     lib/ultrasound/ultrasound.c
+    lib/motor_control/bridge_h.c
 )
 
 target_include_directories(
     app PRIVATE
     lib/tpm_dt
     lib/ultrasound
+    lib/motor_control
 )
