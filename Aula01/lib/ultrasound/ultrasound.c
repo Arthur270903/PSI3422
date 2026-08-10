@@ -1,8 +1,6 @@
 
 #include "ultrasound.h"
 
-void handler_sensor();
-
 // --- trigger pwm config ---
 #define PWM_TRIGGER_NODE DT_ALIAS(pwm_trigger) // pwm trigger
 #define TRIGGER_PULSE_NS 10000                 // 10 us = 10000 ns
@@ -23,13 +21,6 @@ void handler_sensor();
     #error "Unsupported board"
 #endif
 // ---
-
-// ultrasound thread
-K_THREAD_DEFINE(ultrasound_tid, 512,
-                ultrasound_entry_point, NULL, NULL, NULL,
-                1, 0, 0);
-
-K_SEM_DEFINE(ultrasound_sem, 0, 1);
 
 volatile uint32_t pulse_duration_ticks = 0;
 
@@ -96,23 +87,10 @@ void handler_sensor()
         // 2 cm de distância mínima para 12 MHz equivale a cerca de 1380 ticks.
         if (duration > 680)
             pulse_duration_ticks = duration;
-
-        k_sem_give(&ultrasound_sem);
     }
 }
 
-uint32_t sensor_read_ticks()
+uint32_t sensor_read_distance()
 {
     return pulse_duration_ticks;
-}
-
-uint32_t sensor_read_distance_cm()
-{
-    // c = 340 m/s = 340 * 100 cm / 1000000us = 34 cm/us
-    // considerando ida e volta temos:
-    //      c = 2 * x / t => x = c * t / 2 = t / (2 / c) = t / 58.8 cm
-    // 
-    // isso se a leitura de  sensor_read_ticks() fosse dada em us, mas é dada em ticks
-    // de 1 / (48 / 8) uS => 1 / 6 us 
-    return sensor_read_ticks() / (58 * 6);
 }
