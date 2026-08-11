@@ -27,7 +27,7 @@ void handler_sensor();
 // ultrasound thread
 K_THREAD_DEFINE(ultrasound_tid, 512,
                 ultrasound_entry_point, NULL, NULL, NULL,
-                1, 0, 0);
+                2, 0, 0);
 
 K_SEM_DEFINE(ultrasound_sem, 0, 1);
 

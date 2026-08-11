@@ -23,7 +23,7 @@ extern void ultrasound_entry_point(void *, void *, void *)
 
         uint32_t distance_cm = sensor_read_distance_cm();
 
-        if (distance_cm >= TARGET_DISTANCE_CM)
+        if (distance_cm <= TARGET_DISTANCE_CM)
             k_sem_give(&target_sem);
     }
 }
@@ -36,10 +36,9 @@ void motor_control_entry_point(void *, void *, void *)
     if(brdge_h_init())
         return;
 
-    brdge_h_front();
-
     while (1) 
     {   
+        brdge_h_front();
         k_sem_take(&target_sem, K_FOREVER);
         brdge_h_stop();  //
         k_msleep(1000);  // 
