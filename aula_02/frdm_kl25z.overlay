@@ -1,0 +1,48 @@
+#include <nxp/kinetis/MKL25Z128VLK4-pinctrl.h>
+
+&gpioc 
+{
+    status = "okay";
+};
+
+&pinctrl {
+    spi0_default: spi0_default {
+        group0 {
+            pinmux = <SPI0_SCK_PTC5>,
+                     <SPI0_MOSI_PTC6>,
+                     <SPI0_MISO_PTC7>;
+            drive-strength = "low";
+            slew-rate = "slow";
+        };
+    };
+};
+
+/ {
+    soc 
+    {
+        spi0: spi@40076000 
+        {
+            compatible = "nxp,kinetis-l-spi";
+            reg = <0x40076000 0x1000>;
+            
+            clocks = <&sim KINETIS_SIM_CLOCK(KINETIS_SIM_BUS_CLK, 0x1034, 22)>;
+
+            pinctrl-0 = <&spi0_default>;
+            pinctrl-names = "default";
+
+            #address-cells = <1>;
+            #size-cells = <0>;
+            status = "okay";
+
+            cs-gpios = <&gpioc 4 GPIO_ACTIVE_LOW>;
+
+            spi_dev_a: spi-dev-a@0 {
+                compatible = "vnd,spi-device";
+                reg = <0>;
+                spi-max-frequency = <1000000>;
+                
+                status = "okay";
+            };
+        };
+    };
+};
