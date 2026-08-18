@@ -7,4 +7,5 @@ project(aula_02)
 
 target_sources(app PRIVATE sources/main.c)
 
-add_subdirectory(drivers/spi_nxp)
+add_subdirectory(drivers/spi_nxp lib)
+target_include_directories(app PRIVATE lib)
