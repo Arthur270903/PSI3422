@@ -5,7 +5,7 @@ list(APPEND DTS_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(aula_02)
 
-target_sources(app PRIVATE sources/main.c)
+target_sources(app PRIVATE sources/main.c lib/nrf24l01.c)
 
 add_subdirectory(drivers/spi_nxp lib)
 target_include_directories(app PRIVATE lib)

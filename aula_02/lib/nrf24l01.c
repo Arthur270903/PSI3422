@@ -1,44 +1,122 @@
 #include "nrf24l01.h"
-#include <zephyr/kernel.h>
-#include <zephyr/drivers/spi.h>
 
-uint8_t nrf24_reg(const struct spi_dt_spec *spi_dev, uint8_t reg, uint8_t data) 
+K_SEM_DEFINE(radio_rx_sem, 0, 1)
+
+static const struct gpio_dt_spec ce_pin  = GPIO_DT_SPEC_GET(DT_NODELABEL(spi_dev_a), ce_gpios);
+static const struct gpio_dt_spec irq_pin = GPIO_DT_SPEC_GET(DT_NODELABEL(spi_dev_a), irq_gpios);
+
+static struct gpio_callback irq_callback_data;
+
+static const struct spi_dt_spec *radio_spi;
+
+void nrf24_radio_enable(void) 
 {
-    uint8_t tx_data[2] = {reg, data};
-    uint8_t rx_data[2] = {0};
+    gpio_pin_set_dt(&ce_pin, 1);
+}
 
-    struct spi_buf tx_buf = { .buf = tx_data, .len = 2 };
-    struct spi_buf rx_buf = { .buf = rx_data, .len = 2 };
-    struct spi_buf_set tx_set = { .buffers = &tx_buf, .count = 1 };
-    struct spi_buf_set rx_set = { .buffers = &rx_buf, .count = 1 };
+void nrf24_radio_disable(void) 
+{
+    gpio_pin_set_dt(&ce_pin, 0);
+}
 
-   
-    spi_transceive_dt(spi_dev, &tx_set, &rx_set);
-
-    return rx_data[1]; 
+void nrf24_send_command(const struct spi_dt_spec *spi_dev, uint8_t command) 
+{
+    nrf24_write_buffer(spi_dev, command, NULL, 0);
 }
 
 void nrf24_write_register(const struct spi_dt_spec *spi_dev, uint8_t reg, uint8_t data) 
 {
-    nrf24_reg(spi_dev, reg | 0x20, data);
+    nrf24_write_buffer(spi_dev, reg, &data, 1);
 }
 
 uint8_t nrf24_read_register(const struct spi_dt_spec *spi_dev, uint8_t reg) 
 {
-    return nrf24_reg(spi_dev, reg, 0xff);
+    uint8_t data = 0;
+    nrf24_read_buffer(spi_dev, reg, &data, 1);
+
+    return data;
 }
 
-void nrf24_init(const struct spi_dt_spec *spi_dev) 
+void nrf24_write_buffer(const struct spi_dt_spec *spi_dev, uint8_t reg, const uint8_t *data, size_t lenght)
 {
-    nrf24_write_register(spi_dev, CONFIG, 0x0F); // CONFIG: PWR_UP=1, PRIM_RX=1
-    nrf24_write_register(spi_dev, EN_AA, 0xFF); 
-    nrf24_write_register(spi_dev, EN_RXADDR, 0x00); // EN_RXADDR: Enable data pipes 0 and 1
-    nrf24_write_register(spi_dev, SETUP_RETR, 0x03); // SETUP_RETR: Auto retransmit delay = 1000us, count = 3
-    nrf24_write_register(spi_dev, RF_CH, 0x02); // RF_CH: Set RF channel to 2
-    nrf24_write_register(spi_dev, RF_SETUP, 0x17); // RF_SETUP: Set data rate to 1Mbps and power to max se der merda é culpa do 0x17
-    nrf24_write_register(spi_dev, STATUS, 0x70); // STATUS: Clear any pending interrupts
-    nrf24_write_register(spi_dev, RX_ADDR_P0, 0xE7); // RX_ADDR_P0: Set address for data pipe 0
-    nrf24_write_register(spi_dev, FLUSH_RX, 0x00); // Flush RX FIFO
-    nrf24_write_register(spi_dev, FLUSH_TX, 0x00); // Flush TX FIFO
+    uint8_t command = (reg < 0x20) ? (reg | 0x20) : reg;
+
+    struct spi_buf tx_buffers[] = { {.buf = &command, .len = 1 }, { .buf = (void *)data, .len = lenght } };
+    struct spi_buf_set tx_buffer_set = { .buffers = tx_buffers, .count = 2 };
+
+    spi_write_dt(spi_dev, &tx_buffer_set);
+}
+
+void nrf24_read_buffer(const struct spi_dt_spec *spi_dev, uint8_t command, uint8_t *data, size_t lenght)
+{
+    struct spi_buf tx_buffers[] = { {.buf = &command, .len = 1 }, { .buf = NULL, .len = lenght } };
+    struct spi_buf_set tx_buffer_set = { .buffers = tx_buffers, .count = 2 };
+
+    struct spi_buf rx_buffers[] = { {.buf = NULL, .len = 1 }, { .buf = data, .len = lenght } };
+    struct spi_buf_set rx_buffer_set = { .buffers = rx_buffers, .count = 2 };
+
+    spi_transceive_dt(spi_dev, &tx_buffer_set, &rx_buffer_set);
+}
+
+void nrf24_irq_handler(const struct device *dev, struct gpio_callback *cb, uint32_t pins) 
+{
+    uint8_t status = nrf24_read_register(radio_spi, 0x07);
+
+    if (status & 0x10)
+    {
+        printk("Erro: Sem resposta.\n");
+        nrf24_send_command(radio_spi, 0xe1);
+    }
+    if (status & 0x20)
+        printk("Enviado com sucesso.\n");
+    if (status & 0x40)
+        k_sem_give(&radio_rx_sem);
+
+    nrf24_write_register(radio_spi, 0x07, status & 0x70);
+}
+
+uint8_t nrf24_init(const struct spi_dt_spec *spi_dev) 
+{
+    k_msleep(100); // power on reset
+
+    if (!gpio_is_ready_dt(&ce_pin))
+    {
+        printk("Erro: Pino CE não está pronto");
+        return -ENODEV;
+    }
+
+    if (!gpio_is_ready_dt(&irq_pin))
+    {
+        printk("Erro: Pino IRQ não está pronto");
+        return -ENODEV;
+    }
+
+    radio_spi = spi_dev;
+
+    gpio_pin_configure_dt(&ce_pin, GPIO_OUTPUT_INACTIVE);
+    gpio_pin_configure_dt(&irq_pin, GPIO_INPUT);
+
+    gpio_pin_interrupt_configure_dt(&irq_pin, GPIO_INT_EDGE_TO_ACTIVE);
+
+    gpio_init_callback(&irq_callback_data, nrf24_irq_handler, 1 << irq_pin.pin);
+    gpio_add_callback(irq_pin.port, &irq_callback_data);
+
+    nrf24_write_register(spi_dev, 0x00, 0x0f); // CONFIG: PWR_UP, PRIM_RX
+    k_msleep(2); // wait
+
+    nrf24_write_register(spi_dev, 0x01, 0x3f); // EN_AA: Auto ACK
+    nrf24_write_register(spi_dev, 0x02, 0x01); // EN_RXADDR: Enable Pipe 0
+    nrf24_write_register(spi_dev, 0x04, 0x03); // SETUP_RETR:
+    nrf24_write_register(spi_dev, 0x05, 0x10); // RF_CH: Canal 0x10
+    nrf24_write_register(spi_dev, 0x06, 0x07); // RF_SETUP: 1Mbps, Max Power
+
+    nrf24_write_register(spi_dev, 0x1d, 0x06); // FEATURE: EN_DPL, EN_ACK_PAY TODO:
+    nrf24_write_register(spi_dev, 0x1c, 0x01); // DYNPD: DPL_P1
+
+    nrf24_write_register(spi_dev, 0x07, 0x70); // STATUS: CLEAN FLAGS
+    nrf24_send_command(spi_dev, 0xE1); // FLUSH_TX
+    nrf24_send_command(spi_dev, 0xE2); // FLUSH_RX
+
+    return 0;
 }
 
