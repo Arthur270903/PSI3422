@@ -44,35 +44,37 @@ void nrf24_write_buffer(const struct spi_dt_spec *spi_dev, uint8_t reg, const ui
     struct spi_buf tx_buffers[] = { {.buf = &command, .len = 1 }, { .buf = (void *)data, .len = lenght } };
     struct spi_buf_set tx_buffer_set = { .buffers = tx_buffers, .count = 2 };
 
-    spi_write_dt(spi_dev, &tx_buffer_set);
+    int ret = spi_write_dt(spi_dev, &tx_buffer_set);
+    if (ret < 0)
+        printk("SPI TX Error: %d\n", ret);
 }
 
 void nrf24_read_buffer(const struct spi_dt_spec *spi_dev, uint8_t command, uint8_t *data, size_t lenght)
 {
-    struct spi_buf tx_buffers[] = { {.buf = &command, .len = 1 }, { .buf = NULL, .len = lenght } };
+    uint8_t dummy_tx[32] = {0};
+    uint8_t dummy_rx;
+    
+    struct spi_buf tx_buffers[] = { 
+        { .buf = &command, .len = 1 }, 
+        { .buf = dummy_tx, .len = lenght } 
+    };
     struct spi_buf_set tx_buffer_set = { .buffers = tx_buffers, .count = 2 };
 
-    struct spi_buf rx_buffers[] = { {.buf = NULL, .len = 1 }, { .buf = data, .len = lenght } };
+    struct spi_buf rx_buffers[] = { 
+        { .buf = &dummy_rx, .len = 1 }, 
+        { .buf = data, .len = lenght } 
+    };
     struct spi_buf_set rx_buffer_set = { .buffers = rx_buffers, .count = 2 };
 
-    spi_transceive_dt(spi_dev, &tx_buffer_set, &rx_buffer_set);
+    int ret =  spi_transceive_dt(spi_dev, &tx_buffer_set, &rx_buffer_set);
+    if (ret < 0)
+        printk("SPI RX Error: %d\n", ret);
 }
 
 void nrf24_irq_handler(const struct device *dev, struct gpio_callback *cb, uint32_t pins) 
 {
-    uint8_t status = nrf24_read_register(radio_spi, 0x07);
 
-    if (status & 0x10)
-    {
-        printk("Erro: Sem resposta.\n");
-        nrf24_send_command(radio_spi, 0xe1);
-    }
-    if (status & 0x20)
-        printk("Enviado com sucesso.\n");
-    if (status & 0x40)
-        k_sem_give(&radio_rx_sem);
-
-    nrf24_write_register(radio_spi, 0x07, status & 0x70);
+    k_sem_give(&radio_rx_sem);
 }
 
 uint8_t nrf24_init(const struct spi_dt_spec *spi_dev) 
