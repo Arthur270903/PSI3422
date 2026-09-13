@@ -1,0 +1,15 @@
+description: Nordic NRF24L01+ Wireless Transceiver
+
+compatible: "nordic,nrf24l01"
+
+include: spi-device.yaml
+
+properties:
+  ce-gpios:
+    type: phandle-array
+    required: true
+    description: Pin CE (Chip Enable)
+  irq-gpios:
+    type: phandle-array
+    required: false
+    description: Pin IRQ

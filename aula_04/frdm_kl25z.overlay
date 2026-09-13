@@ -1,0 +1,69 @@
+/*
+ * Overlay: 2 sensores IR HW-201 como encoder de roda (PTA4/PTA5)
+ * + 4 saidas digitais para a ponte H L298N (PTE2..PTE5)
+ *
+ * ENCODER (HW-201): OUT = HIGH sem marca, OUT = LOW com marca (confirmado
+ * no datasheet). GPIO_ACTIVE_LOW faz gpio_pin_get_dt() == 1 na marca.
+ * Disco: 24 faixas escuras + 24 claras = 48 transicoes por volta.
+ *
+ * PONTE H (L298N): IN1..IN4 controlam a direcao de cada motor.
+ * ENA/ENB assumidos sempre habilitados via jumper na propria placa
+ * do L298N (sem controle de velocidade por PWM, so liga/desliga/direcao).
+ */
+
+/ {
+    encoder_sensors: encoder_sensors {
+        compatible = "gpio-keys";
+
+        sensor0: sensor_0 {
+            gpios = <&gpioa 4 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+            label = "Encoder roda esquerda (PTA4)";
+        };
+
+        sensor1: sensor_1 {
+            gpios = <&gpioa 5 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+            label = "Encoder roda direita (PTA5)";
+        };
+    };
+
+    motor_pins: motor_pins {
+        compatible = "gpio-leds";
+
+        in1: in1 {
+            gpios = <&gpioe 2 GPIO_ACTIVE_HIGH>;
+            label = "L298N IN1 - motor esquerdo (PTE2)";
+        };
+
+        in2: in2 {
+            gpios = <&gpioe 3 GPIO_ACTIVE_HIGH>;
+            label = "L298N IN2 - motor esquerdo (PTE3)";
+        };
+
+        in3: in3 {
+            gpios = <&gpioe 4 GPIO_ACTIVE_HIGH>;
+            label = "L298N IN3 - motor direito (PTE4)";
+        };
+
+        in4: in4 {
+            gpios = <&gpioe 5 GPIO_ACTIVE_HIGH>;
+            label = "L298N IN4 - motor direito (PTE5)";
+        };
+    };
+
+    aliases {
+        irsensor0 = &sensor0;
+        irsensor1 = &sensor1;
+        motorin1 = &in1;
+        motorin2 = &in2;
+        motorin3 = &in3;
+        motorin4 = &in4;
+    };
+};
+
+&gpioa {
+    status = "okay";
+};
+
+&gpioe {
+    status = "okay";
+};
