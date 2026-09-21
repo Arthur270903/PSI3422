@@ -1,0 +1,50 @@
+#include <zephyr/dt-bindings/pwm/pwm.h>
+#include <zephyr/dt-bindings/clock/kinetis_sim.h>
+#include <zephyr/dt-bindings/gpio/gpio.h>
+
+&gpioa { status = "okay"; };
+&gpioc { status = "okay"; };
+&gpiod { status = "okay"; };
+&gpioe { status = "okay"; };
+
+/ {
+    zephyr,user {
+        pins-control-gpios = <&gpioe 2 GPIO_ACTIVE_HIGH>,
+                             <&gpioe 3 GPIO_ACTIVE_HIGH>,
+                             <&gpioe 4 GPIO_ACTIVE_HIGH>,
+                             <&gpioe 5 GPIO_ACTIVE_HIGH>;
+
+        echo-gpios      = <&gpiod 5 GPIO_ACTIVE_HIGH>;
+        irsensor0-gpios = <&gpioa 4 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+        irsensor1-gpios = <&gpioa 5 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+        ce-gpios        = <&gpioc 9 GPIO_ACTIVE_HIGH>;
+        irq-gpios       = <&gpiod 4 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
+
+        pwms = <&tpm0 0 PWM_MSEC(60) PWM_POLARITY_NORMAL>,   /* idx 0: trigger ultrassom */
+               <&tpm2 0 PWM_USEC(40) PWM_POLARITY_NORMAL>,   /* idx 1: motor esquerdo, 25 kHz */
+               <&tpm2 1 PWM_USEC(40) PWM_POLARITY_NORMAL>;   /* idx 2: motor direito, 25 kHz */
+
+    };
+};
+
+&tpm0 {
+    prescaler = <64>;
+
+    status = "okay";
+};
+
+&tpm2 {
+    prescaler = <16>;
+
+    status = "okay";
+};
+
+&spi0 {
+    spi_dev_a: nrf24@0 {
+        compatible = "vnd,spi-device";
+        reg = <0>;
+        spi-max-frequency = <1000000>;
+        status = "okay";
+    };
+};
+

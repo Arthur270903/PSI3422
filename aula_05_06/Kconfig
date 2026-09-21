@@ -1,0 +1,38 @@
+source "Kconfig.zephyr"
+
+mainmenu "Configuracoes da Aplicacao"
+
+config APP_ROLE_TRANSMITTER
+    bool "Build as transmitter"
+    default n
+
+config APP_TARGET_DISTANCE_CM
+    int "Distancia minima para desvio de obstaculo (cm)"
+    default 10
+    help
+      Distancia medida pelo sensor ultrassonico para disparar a manobra de desvio.
+
+config APP_PULSES_PER_TURN
+    int "Quantidade de faixas pretas e brancas no disco da roda."
+    default 48
+    help
+        Quantidade de faixas pretas e brancas no disco da roda.
+
+config APP_WHELL_DIAMETER
+    int "Diâmetro da roda"
+    default 66
+    help
+        Tamanho do diâmetro da roda.
+
+config APP_WHEELBASE
+    int "Distância entre os eixos"
+    default 120
+    help
+        Distância entre os eixos do carrinho.
+
+config APP_DOWNTIME_MS
+    int "Tempo em ms que o carrinho fica parado após uma rotação"
+    default 200
+    help
+        Tempo em ms que o carrinho fica parado após uma rotação
+        
