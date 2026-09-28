@@ -1,4 +1,4 @@
-#if defined(CONFIG_APP_ROLE_TRANSMITTER)
+
 
 #include <zephyr/kernel.h>
 
@@ -17,12 +17,13 @@ K_SEM_DEFINE(turn_start_sem,        0, 1);
 K_SEM_DEFINE(turn_done_sem,         0, 1);
 K_SEM_DEFINE(rotation_complete_sem, 0, 1);
 
+
 /* pulsos_90 = (bitola * pulsos_por_volta) / (4 * diametro_roda)
  * -> quantos pulsos cada roda precisa girar (em sentidos opostos)
  *    para o carrinho fazer um giro de 90 graus no proprio eixo.
  * Isso e uma aproximacao geometrica (sem escorregamento); se na pratica
  * o giro passar ou nao completar 90 graus, ajuste esse valor na mao. */
-#define PULSES_90_DEGREES ((CONFIG_APP_WHEELBASE * CONFIG_APP_PULSES_PER_TURN) / (4 * CONFIG_APP_WHELL_DIAMETER))
+#define PULSES_90_DEGREES ((CONFIG_APP_WHEELBASE * CONFIG_APP_PULSES_PER_TURN) / (4 * CONFIG_APP_WHELL_DIAMETER))+150
 
 typedef enum 
 {
@@ -93,6 +94,10 @@ void motor_control_entry_point(void *, void *, void *)
     if(motor_calibrate())
         return;
 
+   
+    
+
+
     ultrasound_set_threshold_notify(CONFIG_APP_TARGET_DISTANCE_CM, &target_sem);
 
     car_state_t car_state = STATE_MOVING_FORWARD;
@@ -141,19 +146,19 @@ void motor_control_entry_point(void *, void *, void *)
                     bridge_h_stop();
                     k_msleep(CONFIG_APP_DOWNTIME_MS);
 
-                    request_rotation(TURN_RIGHT, 90);
+                    request_rotation(TURN_LEFT, 90);
                     k_sem_reset(&target_sem);
                     k_msleep(CONFIG_APP_DOWNTIME_MS);
 
                     if (check_obstacle()) 
                     {
-                        request_rotation(TURN_LEFT, 180);
+                        request_rotation(TURN_RIGHT, 180);
                         k_sem_reset(&target_sem);
                         k_msleep(CONFIG_APP_DOWNTIME_MS);
 
                         if (check_obstacle()) 
                         {
-                            request_rotation(TURN_LEFT, 90);
+                            request_rotation(TURN_RIGHT, 90);
                             bridge_h_stop();
                         }
                     }
@@ -185,4 +190,4 @@ K_THREAD_DEFINE(motor_control_tid, 512,
                 motor_control_entry_point, 
                 NULL, NULL, NULL,
                 0, 0, 0);
-#endif /* defined(CONFIG_APP_ROLE_TRANSMITTER) */
+ /* defined(CONFIG_APP_ROLE_TRANSMITTER) */

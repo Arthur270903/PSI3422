@@ -38,6 +38,8 @@ void nrf24l01_entry_point(void *, void *, void *)
     nrf24_radio_disable();
     nrf24_write_register(&spi_dev, 0x00, 0x0e); // CONFIG: PRIM_TX (modo tx)
 
+    test_data = nrf24_read_register(&spi_dev, NRF24_REG_CONFIG);
+    LOG_INF("-CONFIG: 0x%02x", test_data);
     nrf24_write_buffer(&spi_dev, 0x10, address, 5); // TX_ADDR
     nrf24_write_buffer(&spi_dev, 0x0a, address, 5); // RX_ADDR_P0
 
@@ -59,6 +61,7 @@ void nrf24l01_entry_point(void *, void *, void *)
                 nrf24_radio_disable();
                 
                 k_msleep(5);
+                    LOG_INF("CONFIG: 0x%02x", test_data);
                 nrf24_write_register(&spi_dev, NRF24_REG_STATUS, NRF24_STATUS_CLEAR_ALL); 
             }
         }

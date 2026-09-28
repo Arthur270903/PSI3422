@@ -18,18 +18,24 @@ static const struct pwm_dt_spec pwm_motor_right = PWM_DT_SPEC_GET_BY_IDX(DT_PATH
 int bridge_h_init(void) 
 {
     if (!gpio_is_ready_dt(&out1) || !gpio_is_ready_dt(&out2) ||
-        !gpio_is_ready_dt(&out3) || !gpio_is_ready_dt(&out4)) 
+        !gpio_is_ready_dt(&out3) || !gpio_is_ready_dt(&out4))
     {
         return -ENODEV;
     }
 
-    gpio_pin_configure_dt(&out1, GPIO_OUTPUT_INACTIVE);
-    gpio_pin_configure_dt(&out2, GPIO_OUTPUT_INACTIVE);
-    gpio_pin_configure_dt(&out3, GPIO_OUTPUT_INACTIVE);
-    gpio_pin_configure_dt(&out4, GPIO_OUTPUT_INACTIVE);
+    int err = 0;
+    err |= gpio_pin_configure_dt(&out1, GPIO_OUTPUT_INACTIVE);
+    err |= gpio_pin_configure_dt(&out2, GPIO_OUTPUT_INACTIVE);
+    err |= gpio_pin_configure_dt(&out3, GPIO_OUTPUT_INACTIVE);
+    err |= gpio_pin_configure_dt(&out4, GPIO_OUTPUT_INACTIVE);
 
+    if (err) {
+        LOG_ERR("Falha ao configurar pinos da ponte H: %d", err);
+        return err;
+    }
     return 0;
 }
+
 
 void bridge_h_front() 
 {
