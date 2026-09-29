@@ -1,0 +1,45 @@
+    \subsection{Objetivos}
+        Implementar a comunicação serial entre duas placas de desenvolvimento \texttt{Freedom} (\texttt{kl25z}) utilizando os \textit{transceivers} \texttt{nRF24L01}.
+    
+    Através do terminal do computador, controlar remotamente um LED na outra placa \texttt{Freedom}.
+
+\subsection{Observações}
+    \begin{itemize}
+        \item Lembre-se que a tensão máxima de alimentação do \texttt{nRF24L01} é de \(3{,}6\) V.
+        \item Os transceptores utilizam a comunicação SPI.
+        \item Além da comunicação SPI, os pinos \texttt{CE} e \texttt{CSN} (\texttt{IRQ} opcional) precisam ser configurados para transmitir/receber dados.
+    \end{itemize}
+
+\subsection{Resultados}
+    A aula foi feita utilizando apenas os recursos do \texttt{Zephyr} (sem utilizar recursos \textit{bare metal}), portanto para isso primeiramente foi feito um mapeamento dos pinos e recursos utilizados no \texttt{device tree} (\texttt{frdm\_kl25z.overlay}). 
+
+    \begin{table}[H]
+    \centering
+    \begin{tabular}{ c c l }
+        \hline
+        \textbf{Pino nRF24L01} & \textbf{Pino KL25Z} & \textbf{Configuração no Zephyr}             \\ \hline
+        SCK                    & PTC5                & \texttt{SPI0\_SCK\_PTC5}                    \\
+        MOSI                   & PTC6                & \texttt{SPI0\_MOSI\_PTC6}                   \\ 
+        MISO                   & PTC7                & \texttt{SPI0\_MISO\_PTC7}                   \\ 
+        CSN                    & PTC3                & \texttt{GPIO\_ACTIVE\_LOW}                  \\ 
+        CE                     & PTC9                & \texttt{GPIO\_ACTIVE\_HIGH}                 \\ 
+        IRQ                    & PTD4                & \texttt{GPIO\_ACTIVE\_LOW | GPIO\_PULL\_UP} \\ \hline
+    \end{tabular}
+    \caption{Mapeamento de pinos entre o módulo nRF24L01 e a placa Freedom KL25Z.}
+    \end{table}
+
+    Em seguida foi feito um teste de \textit{loopback} da comunicação SPI da placa para validar o funcionamento do recurso com isso se iniciou os estudos e desenvolvimento de uma biblioteca simples para controlar o módulo de rádio.
+
+    No rádio se utilizou os recursos de:
+
+    \begin{itemize}
+        \item \texttt{ACK} automático;
+        \item \(1\) Mbps com \(0\) dBm na comunicação RF;
+        \item Habilita o endereço de recepção no Pipe 0;
+        \item Canal \(0x10\) de comunicação;
+    \end{itemize}
+
+    Com tudo configurado foi feita uma tentativa de comunicação entre a placa \texttt{kl25z} e o \texttt{nRF24L01}, para validar a comunicação entre eles, para isso foi feita uma leitura do registrador \(0x00\) (\texttt{CONFIG}) esperando receber a resposta \textit{default} \(0x08\).
+
+    Por fim, após todos os testes intermediários terem apresentados resultados positivos foi realizado a comunicação entre as placas com a instrução de ligar e desligar o LED verde da placa receptora, com sucesso.
+    

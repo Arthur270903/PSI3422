@@ -1,0 +1,73 @@
+\subsection*{Objetivo}
+Integrar encoders, ponte H, sensor ultrassônico e comunicação sem fio (nRF24L01+) em um carrinho
+que anda de forma autônoma, desvia de obstáculos e recebe comandos remotos.
+
+\subsection{O que foi implementado, parcialmente implementado ou não implementado}
+
+\paragraph{Implementado.}
+\begin{itemize}[noitemsep]
+    \item Reorganização do código em bibliotecas separadas (\texttt{encoder}, \texttt{motor\_control},
+          \texttt{ultrasound}, \texttt{nrf24l01}), com parâmetros configuráveis via Kconfig
+          (papel de transmissor ou receptor, distância mínima de 10\,cm, diâmetro da roda, bitola,
+          pulsos por volta e tempo de parada).
+    \item Controle de velocidade dos motores por PWM (canais do TPM2, período de 40\,\textmu s, ou seja, 25\,kHz),
+          além dos comandos de frente, ré, esquerda, direita e parada.
+    \item Sensor ultrassônico HC-SR04: pulso de \textit{trigger} de 10\,\textmu s gerado por PWM (período de 60\,ms),
+          medição do \textit{echo} por interrupção com contador de ciclos, conversão para centímetros e
+          notificação por semáforo quando a distância fica abaixo do limiar.
+    \item Encoders com contadores atômicos e alvo de pulsos com notificação por semáforo,
+          permitindo giros de ângulo arbitrário.
+    \item Máquina de estados do carrinho (andar, desviar de obstáculo, parar), executada em \textit{threads}
+          com \texttt{k\_poll}, semáforos e fila de mensagens. No desvio, o carrinho para, gira $90^\circ$ para a esquerda
+          e verifica o caminho; se ainda houver obstáculo, gira $180^\circ$ para a direita e verifica novamente;
+          caso persista, gira $90^\circ$ para a direita e para.
+\end{itemize}
+
+\paragraph{Parcialmente implementado.}
+\begin{itemize}[noitemsep]
+    \item \textbf{Enlace de rádio:} foram escritos o código de acesso por SPI ao nRF24L01+ (leitura e escrita de registradores,
+          buffers e inicialização), o tratamento da interrupção IRQ, os papéis de transmissor e receptor
+          escolhidos por Kconfig e o envio de comandos (\texttt{R}, \texttt{S}, \texttt{P}, \texttt{C}) digitados no terminal.
+          No carrinho, apenas os comandos de \textit{run} e \textit{stop} têm efeito; \texttt{P} e \texttt{C}
+          foram definidos, mas sem ação associada. Como a comunicação não funcionou, esta parte não pôde ser validada.
+    \item \textbf{Calibração dos motores:} a função \texttt{motor\_calibrate} apenas fixa as velocidades em 80\% (esquerdo)
+          e 100\% (direito), sem rotina automática. As constantes de iterações e tolerância de pulsos estão declaradas,
+          mas não são utilizadas.
+\end{itemize}
+
+\paragraph{Não implementado / não funcional.}
+\begin{itemize}[noitemsep]
+    \item \textbf{A comunicação sem fio entre as placas não funcionou.} Consequentemente, o controle remoto
+          do carrinho por rádio não pôde ser demonstrado.
+\end{itemize}
+
+\subsection{Dificuldades e soluções encontradas}
+
+\paragraph{Principal dificuldade.}
+O maior problema deste projeto foi o não funcionamento da comunicação sem fio entre as duas placas com
+os módulos nRF24L01+. A falha não foi solucionada até a data da entrega.
+
+\paragraph{Hipótese para a causa e possível solução.}
+Como possível causa, suspeita-se de mau contato nos \textit{jumpers} usados para ligar os módulos de rádio
+à placa, já que o nRF24L01+ é sensível a conexões instáveis nos sinais de SPI e de alimentação.
+Essa suspeita é reforçada pelo fato de que, na Aula 2, a comunicação entre as placas funcionou
+corretamente, com o controle remoto do LED pelo terminal. Esta hipótese ainda não foi confirmada por testes.
+
+Uma possível solução seria montar o módulo de rádio em uma PCB, eliminando os \textit{jumpers} e deixando
+as conexões de SPI, CE, IRQ e alimentação fixas. Essa alternativa foi apenas considerada e não será
+implementada pelo grupo.
+\paragraph{Outras dificuldades.}
+\begin{itemize}
+    \item \textbf{Sincronização entre interrupções e \textit{threads}} (encoders, ultrassom e controle do carrinho). \\
+          \textbf{Solução:} contadores atômicos, semáforos de notificação, fila de mensagens e \texttt{k\_poll}
+          para o carrinho reagir a obstáculos e a comandos sem espera ocupada.
+    \item \textbf{Medição de distância com o ultrassom} (conversão de ciclos do relógio para microssegundos e depois para centímetros,
+          e ruído em pulsos muito curtos). \\
+          \textbf{Solução:} conversão com \texttt{k\_cyc\_to\_us\_floor32}, divisão por 58 e descarte de pulsos abaixo de
+          uma duração mínima.
+    \item \textbf{Motores com velocidades diferentes, fazendo o carrinho desviar da linha reta.} \\
+          \textbf{Solução parcial:} controle por PWM com velocidades distintas por lado (80\% e 100\%),
+          ajustadas manualmente, sem calibração automática.
+\end{itemize}
+
+\end{document}

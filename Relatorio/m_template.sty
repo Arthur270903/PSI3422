@@ -1,0 +1,47 @@
+% https://github.com/KryptonPlusPlus
+\ProvidesPackage{m_template}
+
+\newcommand*{\subtitle}[1]{\gdef\@subtitle{#1}}%
+
+\renewcommand{\maketitle}
+{%
+    {\noindent\LARGE\@title}\hfill%
+    \vskip 1em%
+    {\noindent\Large\@subtitle}%
+    \vskip 1.5em%
+    {\setlength{\tabcolsep}{0pt}%
+    \noindent\large\begin{tabular}{l @{\extracolsep{40pt}} r}%
+        \@author%
+    \end{tabular}\par}%
+    \vskip 1.5em%
+    {\noindent\large\@date}%
+    \par\vskip 1.5em%
+}
+
+\linespread{1.15}
+
+\renewcommand{\section}%
+{%
+    \@startsection{section}{1}{\z@}%
+    {-3.5ex \@plus -1ex \@minus -.2ex}%
+    {2.3ex \@plus .2ex}%
+    {\normalfont\Large\scshape\bfseries}%
+}
+
+\renewcommand{\subsection}%
+{%
+    \@startsection{subsection}{2}{\z@}%
+    {-3.25ex\@plus -1ex \@minus -.2ex}%
+    {1.5ex \@plus .2ex}%
+    {\indent\normalfont\large\bfseries}%
+}
+
+\renewcommand{\subsubsection}%
+{%
+    \@startsection{subsubsection}{3}{6ex}%
+    {-3.25ex\@plus -1ex \@minus -.2ex}%
+    {1.5ex \@plus .2ex}%
+    {\indent\normalfont\normalsize}%
+}
+
+\endinput

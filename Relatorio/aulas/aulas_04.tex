@@ -1,0 +1,64 @@
+\subsection*{Objetivo}
+Acoplar um encoder em cada motor, calibrá-lo para estimar a distância percorrida
+e usá-lo para controlar o movimento, realizando uma curva de $90^\circ$ para a direita
+e outra para a esquerda.
+
+\subsection{O que foi implementado, parcialmente implementado ou não implementado}
+
+\paragraph{Implementado.}
+\begin{itemize}[noitemsep]
+    \item Leitura dos dois encoders (sensores IR HW-201 em PTA4 e PTA5) por interrupção de GPIO
+          nas duas bordas, resultando em 48 pulsos por volta (24 faixas escuras e 24 claras),
+          com um contador independente para cada roda.
+    \item Filtro de \textit{debounce} de 2\,ms dentro da rotina de interrupção.
+    \item Modo de alinhamento (\texttt{MODO\_ALINHAMENTO}), que apenas imprime no terminal as
+          transições de cada sensor, sem acionar os motores.
+    \item Controle da ponte H L298N por quatro GPIOs (PTE2 a PTE5): frente, ré e parada de cada motor.
+    \item Giro de $90^\circ$ sobre o próprio eixo controlado pelos encoders: o alvo de pulsos é
+          calculado por $\frac{\text{bitola} \cdot \text{pulsos por volta}}{4 \cdot \text{diâmetro da roda}}$
+          (bitola de 120\,mm e roda de 66\,mm, resultando em 21 pulsos por roda), e os motores param quando
+          a média dos dois encoders atinge o alvo.
+    \item Sequência de teste em \textit{loop}: esquerda, direita, direita, esquerda, com intervalo de 10\,s
+          entre as ações e impressão dos pulsos contados a cada giro.
+    \item Configuração do \textit{overlay} de \textit{device tree} (encoders e pinos da ponte H via \textit{aliases}).
+\end{itemize}
+
+\paragraph{Parcialmente implementado.}
+\begin{itemize}[noitemsep]
+    \item \textbf{Calibração do encoder:} a calibração é apenas teórica, baseada na geometria do carrinho
+          (diâmetro da roda e bitola), sem escorregamento. O código deixa indicado que o valor deve ser
+          ajustado manualmente após testes, e não há rotina de calibração experimental.
+    \item Driver SPI próprio para o KL25Z e \textit{binding} do nRF24L01+ estão presentes na pasta,
+          mas não são compilados nesta aula (o \texttt{CMakeLists.txt} inclui apenas \texttt{main.c}).
+          Servem de preparação para a etapa seguinte.
+\end{itemize}
+
+\paragraph{Não implementado.}
+\begin{itemize}[noitemsep]
+    \item Estimativa da distância percorrida em linha reta: as constantes (diâmetro e pulsos por volta)
+          existem, mas não há função que converta pulsos em distância nem deslocamento por distância medida.
+    \item Controle de velocidade: os pinos ENA/ENB do L298N ficam fixos por jumper, então os motores
+          operam apenas ligados ou desligados, sem PWM.
+    \item Compensação de diferenças entre as duas rodas: o giro usa apenas a média dos dois encoders.
+\end{itemize}
+
+\subsection{Dificuldades e soluções encontradas}
+
+\begin{itemize}
+    \item \textbf{Contagens falsas nos encoders} (ruído do comparador LM393 quando o sensor fica em
+          distância ambígua). \\
+          \textbf{Solução:} \textit{debounce} de 2\,ms na interrupção, curto o bastante para não
+          descartar pulsos reais do disco.
+    \item \textbf{Alinhamento entre sensor e disco de faixas.} \\
+          \textbf{Solução:} modo de alinhamento que exibe em tempo real o estado de cada sensor,
+          permitindo ajustar a posição mecânica antes de mover o carrinho.
+    \item \textbf{Ângulo de giro dependente de escorregamento e de diferenças entre os motores.} \\
+          \textbf{Solução parcial:} modelo geométrico com uso da média dos dois encoders como critério de parada.
+\end{itemize}
+
+\paragraph{Dificuldades sem solução até a entrega.}
+A precisão do ângulo de $90^\circ$ e a estimativa de distância dependem de calibração experimental,
+que não foi concluída. Para resolver, seriam feitos: (i) medição do giro real em várias repetições e
+ajuste do número de pulsos alvo com base nos resultados; (ii) implementação da conversão
+$d = \frac{\text{pulsos}}{48}\cdot \pi D$ e validação medindo trajetos de comprimento conhecido;
+(iii) uso de PWM na ponte H para reduzir a velocidade durante os giros e diminuir o escorregamento.
