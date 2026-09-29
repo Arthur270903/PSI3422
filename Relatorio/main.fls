@@ -202,6 +202,8 @@ INPUT ./aulas/aulas_05_06.tex
 INPUT ./aulas/aulas_05_06.tex
 INPUT aulas/aulas_05_06.tex
 INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/cm/cmbxti10.tfm
+INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/cm/cmr17.tfm
+INPUT /usr/share/texlive/texmf-dist/fonts/tfm/public/cm/cmbx12.tfm
 INPUT main.aux
 INPUT ./main.out
 INPUT ./main.out

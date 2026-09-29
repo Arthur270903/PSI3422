@@ -1,7 +1,7 @@
 # Fdb version 4
-["pdflatex"] 1790716985.7971 "/home/arthur/projects/PSI3422/Relatorio/main.tex" "main.pdf" "main" 1790716986.39481 0
+["pdflatex"] 1790717234.87149 "/home/arthur/projects/PSI3422/Relatorio/main.tex" "main.pdf" "main" 1790717235.46466 0
   "/etc/texmf/web2c/texmf.cnf" 1790122703.26495 475 c0e671620eb5563b2130f56340a5fde8 ""
-  "/home/arthur/projects/PSI3422/Relatorio/main.tex" 1790716985.70262 889 e320a395b652478b02beba7b82cdf3ed ""
+  "/home/arthur/projects/PSI3422/Relatorio/main.tex" 1790717234.71738 919 56b79131e97efe1b838f08b5e3905865 ""
   "/usr/share/texlive/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/jknappen/ec/tcrm1000.tfm" 1136768653 1536 e07581a4bb3136ece9eeb4c3ffab8233 ""
   "/usr/share/texlive/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmex7.tfm" 1246382020 1004 54797486969f23fa377b128694d548df ""
@@ -105,14 +105,14 @@
   "aulas/aulas_02.tex" 1790714905.22409 2952 1488668415d45e84fcafded6e19ab9a9 ""
   "aulas/aulas_03.tex" 1790716861.97009 1117 bad058523875d34699917e4f1aa9ab52 ""
   "aulas/aulas_04.tex" 1790714905.22409 4236 6971ed264658d3e0b27201d3481404e0 ""
-  "aulas/aulas_05_06.tex" 1790716701.73748 5008 86cd523affe2871e8392d6f0e889cf1c ""
+  "aulas/aulas_05_06.tex" 1790717234.71738 4994 ff36da45a2c8831459c0090a88021576 ""
   "imagens/WhatsApp Image 2026-09-28 at 18.05.25.jpeg" 1790716571.94109 268008 7bda334a328b9c37c03d722ba3201ccd ""
   "imagens/WhatsApp Image 2026-09-28 at 18.08.21.jpeg" 1790716542.23302 230633 f8dd691741ce5806980288f21ab0eb52 ""
   "imagens/WhatsApp Image 2026-09-29 at 15.29.01(1).jpeg" 1790707110.87236 187360 5d2e7c336f6ed63ead4a04db29bb9adf ""
   "m_template.sty" 1790691352.99783 1025 a3c6bb378bb165947c968e07ab6cdb57 ""
-  "main.aux" 1790716986.32663 3823 fadda3136665e3c10a1f65fb4cfe636e "pdflatex"
-  "main.out" 1790716986.33063 2118 accf88f6a0178fe30cf4ba90f9f8d949 "pdflatex"
-  "main.tex" 1790716985.70262 889 e320a395b652478b02beba7b82cdf3ed ""
+  "main.aux" 1790717235.4094 3823 fadda3136665e3c10a1f65fb4cfe636e "pdflatex"
+  "main.out" 1790717235.4094 2118 accf88f6a0178fe30cf4ba90f9f8d949 "pdflatex"
+  "main.tex" 1790717234.71738 919 56b79131e97efe1b838f08b5e3905865 ""
   (generated)
   "main.aux"
   "main.log"
