@@ -34,6 +34,7 @@ int main(int argc, char *argv[]) {
   Mat_<COR> img, tela;
   VideoWriter vo;
   namedWindow("janela");
+  
   setMouseCallback("janela", on_mouse);
 
   BYTE cmd = '0';
@@ -42,6 +43,7 @@ int main(int argc, char *argv[]) {
     client.receiveImgComp(img);
     hconcat(teclado(estado), img, tela);
     imshow("janela", tela);
+    resizeWindow("janela", 1120, 480);
     if (gravar) {
       Mat saida = (modo=='c') ? Mat(img) : Mat(tela);
       if (!vo.isOpened())
