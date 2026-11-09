@@ -80,12 +80,15 @@ Modelos carrega_modelos(const std::string& arquivo,
                         int n_escalas    = NUMBER_OF_SCALES,
                         float escala_max = 0.1721f,
                         float escala_min = 0.0473f) {
-  if (n_escalas < 2) n_escalas = 2;
+  if (n_escalas < 2) 
+    n_escalas = 2;
+
   Modelos mod;
 
   // Le a imagem colorida da placa. Se o arquivo nao existir, termina o programa.
   cv::Mat_<COR> temp = cv::imread(arquivo, cv::IMREAD_COLOR);
-  if (temp.empty()) erro("Falha na leitura de " + arquivo);
+  if (temp.empty()) 
+    erro("Falha na leitura de " + arquivo);
 
   // Converte para cinza em float, com 0=preto e 1=branco.
   cv::Mat_<float> T;
@@ -105,8 +108,11 @@ Modelos carrega_modelos(const std::string& arquivo,
   cv::inRange(temp, cv::Scalar(255,255,255), cv::Scalar(255,255,255), mascara);
   cv::Mat rotulos, stats, centroides;
   cv::connectedComponentsWithStats(mascara, rotulos, stats, centroides, 4);
+
   int rotulo = rotulos.at<int>(temp.rows/2, temp.cols/2);
-  if (rotulo == 0) erro("Centro da placa nao e branco puro: janela do digito nao encontrada");
+  if (rotulo == 0) 
+    erro("Centro da placa nao e branco puro: janela do digito nao encontrada");
+
   mod.janela = cv::Rect(stats.at<int>(rotulo, cv::CC_STAT_LEFT),  stats.at<int>(rotulo, cv::CC_STAT_TOP),
                         stats.at<int>(rotulo, cv::CC_STAT_WIDTH), stats.at<int>(rotulo, cv::CC_STAT_HEIGHT));
 
@@ -120,6 +126,7 @@ Modelos carrega_modelos(const std::string& arquivo,
   // significado.
   // -------------------------------------------------------------------------
   mod.m.resize(n_escalas);
+  
   for (int i = 0; i < n_escalas; i++) {
     // Escala do modelo i (progressao geometrica entre os dois extremos).
     float escala = escala_max * std::pow(escala_min / escala_max, i / (float)(n_escalas - 1));
@@ -179,6 +186,7 @@ Deteccao detecta_placa(const cv::Mat_<float>& f, const Modelos& mod,
   // Cada iteracao escreve somente em cc[i], portanto nao ha condicao de corrida.
   // -------------------------------------------------------------------------
   std::vector<cv::Mat_<float>> cc(n_escalas);
+
   #pragma omp parallel for
   for (int i = 0; i < n_escalas; i++)
     cv::matchTemplate(f, models[i], cc[i], cv::TM_CCORR);
@@ -201,11 +209,15 @@ Deteccao detecta_placa(const cv::Mat_<float>& f, const Modelos& mod,
     for (int i = 0; i < n_escalas; i++) {
       double maximo; cv::Point p;
       cv::minMaxLoc(cc[i], nullptr, &maximo, nullptr, &p);
-      if (maximo > maior) { maior = (float)maximo; melhor_escala = i; melhor_pos = p; }
+      if (maximo > maior) 
+      { 
+        maior = (float)maximo; melhor_escala = i; melhor_pos = p; 
+      }
     }
 
     // Se nao ha mais picos validos, termina a busca.
-    if (melhor_escala == -1 || maior <= -1.0e29) break;
+    if (melhor_escala == -1 || maior <= -1.0e29) 
+      break;
 
     det.escala.push_back(melhor_escala);
     det.pos.push_back(melhor_pos);
@@ -223,7 +235,8 @@ Deteccao detecta_placa(const cv::Mat_<float>& f, const Modelos& mod,
       int yt = cy - models[i].rows / 2;
       for (int y = std::max(0, yt - 9); y <= std::min(cc[i].rows - 1, yt + 9); y++)
         for (int x = std::max(0, xt - 9); x <= std::min(cc[i].cols - 1, xt + 9); x++)
-          if ((x-xt)*(x-xt) + (y-yt)*(y-yt) < 100) cc[i](y, x) = -1.0e30f;
+          if ((x-xt)*(x-xt) + (y-yt)*(y-yt) < 100) 
+            cc[i](y, x) = -1.0e30f;
     }
   }
 
@@ -234,6 +247,7 @@ Deteccao detecta_placa(const cv::Mat_<float>& f, const Modelos& mod,
   // por isso e' usado para CONFIRMAR se o candidato e' realmente a placa.
   // -------------------------------------------------------------------------
   std::vector<cv::Mat_<float>> ncc(n_escalas);
+
   #pragma omp parallel for
   for (int i = 0; i < n_escalas; i++)
     cv::matchTemplate(f, models[i], ncc[i], cv::TM_CCOEFF_NORMED);
@@ -246,7 +260,9 @@ Deteccao detecta_placa(const cv::Mat_<float>& f, const Modelos& mod,
   for (int k = 0; k < (int)det.escala.size(); k++) {
     float v = ncc[det.escala[k]](det.pos[k].y, det.pos[k].x);
     det.ncc.push_back(v);
-    if (v > maior_ncc) { maior_ncc = v; det.melhor = k; }
+
+    if (v > maior_ncc) 
+      maior_ncc = v; det.melhor = k;
   }
 
   // A placa so e' considerada localizada se o melhor NCC passar do limiar.
@@ -310,7 +326,8 @@ cv::Rect janela_digito(const Modelos& mod, int escala, cv::Point pos, cv::Size t
   int h = cvRound(mod.janela.height * k) - 2 * MARGEM_JANELA;
 
   // Janela pequena demais: nao da para ler o digito.
-  if (w < 4 || h < 4) return cv::Rect();
+  if (w < 4 || h < 4) 
+    return cv::Rect();
 
   // Intersecao com o quadro: garante que x,y,w,h ficam dentro da imagem.
   return cv::Rect(x, y, w, h) & cv::Rect(0, 0, tam_quadro.width, tam_quadro.height);
@@ -329,7 +346,8 @@ cv::Mat_<uchar> ajusta_contraste(const cv::Mat_<uchar>& g) {
 
   // Se um dos dois grupos estiver vazio, nao ha digito (ou a janela esta toda
   // branca / toda preta). Rejeitamos.
-  if (n_fundo == 0 || n_tinta == 0) return cv::Mat_<uchar>();
+  if (n_fundo == 0 || n_tinta == 0) 
+    return cv::Mat_<uchar>();
 
   // inv e' a mascara da tinta (255 onde era escuro).
   cv::Mat inv; cv::bitwise_not(bin, inv);
@@ -339,7 +357,8 @@ cv::Mat_<uchar> ajusta_contraste(const cv::Mat_<uchar>& g) {
   double tinta = cv::mean(g, inv)[0];
 
   // Contraste muito baixo: provavelmente nao existe digito desenhado.
-  if (fundo - tinta < CONTRASTE_MIN) return cv::Mat_<uchar>();
+  if (fundo - tinta < CONTRASTE_MIN) 
+    return cv::Mat_<uchar>();
 
   // Mapa linear:
   //   tinta -> 0
@@ -350,6 +369,7 @@ cv::Mat_<uchar> ajusta_contraste(const cv::Mat_<uchar>& g) {
   double alto = tinta + 0.75 * (fundo - tinta);
   cv::Mat_<uchar> saida;
   g.convertTo(saida, CV_8U, 255.0 / (alto - tinta), -tinta * 255.0 / (alto - tinta));
+
   return saida;
 }
 
@@ -428,14 +448,17 @@ LeituraDigito le_digito(const cv::Mat_<COR>& a, const Modelos& mod, const Detecc
   if (!det.achou) return r;
   int k = det.melhor;
   if (lado_minimo > 0) {
-    if (mod.m[det.escala[k]].cols < lado_minimo) return r;
+    if (mod.m[det.escala[k]].cols < lado_minimo) 
+      return r;
   } else {
-    if (det.escala[k] > ESCALA_PERTO) return r;
+    if (det.escala[k] > ESCALA_PERTO) 
+      return r;
   }
 
   // Calcula a janela do digito no quadro atual.
   cv::Rect j = janela_digito(mod, det.escala[k], det.pos[k], a.size());
-  if (j.empty()) return r;
+  if (j.empty()) 
+    return r;
 
   // Passo 4a: copia a imagem colorida do digito para uma nova imagem.
   r.recorte = a(j).clone();
@@ -444,7 +467,8 @@ LeituraDigito le_digito(const cv::Mat_<COR>& a, const Modelos& mod, const Detecc
   cv::Mat_<uchar> cinza;
   cv::cvtColor(r.recorte, cinza, cv::COLOR_BGR2GRAY);
   cv::Mat_<uchar> ajustada = ajusta_contraste(cinza);
-  if (ajustada.empty()) return r;
+  if (ajustada.empty()) 
+    return r;
 
   // Converte para float 0..1, porque o bbox FLT do MNIST trabalha nessa faixa.
   cv::Mat_<float> af;
@@ -452,13 +476,15 @@ LeituraDigito le_digito(const cv::Mat_<COR>& a, const Modelos& mod, const Detecc
 
   // Passo 4c: bbox + redimensionamento para 14x14.
   cv::Mat_<float> b = clf.normaliza_digito(af);
-  if (b.empty()) return r;
+  if (b.empty()) 
+    return r;
 
   // Copia o 14x14 para uchar so para desenhar no painel de depuracao.
   b.convertTo(r.d14, CV_8U, 255.0);
 
   // Passo 4d: classifica com o FlaNN.
   r.digito = clf.classifica(b);
+  
   return r;
 }
 

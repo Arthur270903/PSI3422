@@ -29,9 +29,8 @@
 #include <vector>
 #include <string>
 
-// Inclui a versao COMPLETA do raspberry.hpp (com MNIST, MnistFlann, converte,
-// somaAbsDois, dcReject etc.). Ela esta na copia lib/raspberry.hpp; os arquivos
-// originais da aula_05 e da aula_04 nao foram alterados.
+// Inclui a versao completa do raspberry.hpp (com MNIST, MnistFlann, converte,
+// somaAbsDois, dcReject etc.). Ela esta na copia lib/raspberry.hpp
 #include "../lib/raspberry.hpp"
 
 // Inclui a biblioteca de deteccao/leitura da placa. O placa.hpp depende das
@@ -73,8 +72,8 @@ int main(int argc, char** argv) {
   //   - ajusta o bounding box;
   //   - constroi o indice FLANN.
   // -------------------------------------------------------------------------
-  std::cout << "Lendo MNIST e treinando FlaNN (pode demorar alguns segundos)..."
-            << std::endl;
+  std::cout << "Lendo MNIST e treinando FlaNN (pode demorar alguns segundos)..." << std::endl;
+
   ClassificadorDigitos clf(PASTA_MNIST);
   std::cout << "FlaNN treinado." << std::endl;
 
@@ -82,7 +81,8 @@ int main(int argc, char** argv) {
   // 4) Abre o video de entrada.
   // -------------------------------------------------------------------------
   cv::VideoCapture cap(arq_entrada);
-  if (!cap.isOpened()) erro("Nao consegui abrir o video de entrada: " + arq_entrada);
+  if (!cap.isOpened()) 
+    erro("Nao consegui abrir o video de entrada: " + arq_entrada);
 
   // O enunciado usa quadros de 320x240. Se o video vier em outro tamanho,
   // redimensionamos para 320x240 para a deteccao funcionar como no fase3p.
@@ -101,7 +101,9 @@ int main(int argc, char** argv) {
                       cv::VideoWriter::fourcc('M','J','P','G'),
                       30,
                       cv::Size(NC + LARG_PAINEL, NL));
-  if (!out.isOpened()) erro("Nao consegui criar o video de saida: " + arq_saida);
+
+  if (!out.isOpened()) 
+    erro("Nao consegui criar o video de saida: " + arq_saida);
 
   // -------------------------------------------------------------------------
   // 6) Variaveis de estatistica (para o resumo final).
