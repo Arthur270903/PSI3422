@@ -67,9 +67,20 @@ struct Modelos {
   int lado_original = 0;           // lado do quadrado.png (401)
 };
 
-// Le quadrado.png, acha a janela do digito e gera os 10 modelos.
+// Le quadrado.png, acha a janela do digito e gera os modelos.
 // Esta funcao e chamada uma unica vez, no inicio do programa.
-Modelos carrega_modelos(const std::string& arquivo) {
+//
+// Parametros opcionais (os padroes reproduzem exatamente o fase3p/fase5):
+//   n_escalas  = quantos modelos gerar;
+//   escala_max = maior escala (placa mais perto/grande);
+//   escala_min = menor escala (placa mais longe/pequena).
+// O cliente6 usa uma faixa ampliada (placas maiores) para se aproximar mais
+// antes de ler o digito. O fase5 usa os padroes, sem mudar a saida.
+Modelos carrega_modelos(const std::string& arquivo,
+                        int n_escalas    = NUMBER_OF_SCALES,
+                        float escala_max = 0.1721f,
+                        float escala_min = 0.0473f) {
+  if (n_escalas < 2) n_escalas = 2;
   Modelos mod;
 
   // Le a imagem colorida da placa. Se o arquivo nao existir, termina o programa.
@@ -100,18 +111,18 @@ Modelos carrega_modelos(const std::string& arquivo) {
                         stats.at<int>(rotulo, cv::CC_STAT_WIDTH), stats.at<int>(rotulo, cv::CC_STAT_HEIGHT));
 
   // -------------------------------------------------------------------------
-  // Gera 10 modelos em progressao geometrica: a escala vai de 0.1721
-  // (aproximadamente 69x69 pixels) ate 0.0473 (aproximadamente 19x19 pixels).
+  // Gera os modelos em progressao geometrica. Com os parametros padrao, sao
+  // 10 modelos indo de 0.1721 (~69x69 pixels) ate 0.0473 (~19x19 pixels).
   //
   // Usamos INTER_NEAREST de proposito: a interpolacao NEAREST nao cria cores
   // novas. O valor 1.0 e' o "don't care" (nao importa) usado pelo dcReject;
   // se interpolar, esse valor se misturaria com os vizinhos e perderia o
   // significado.
   // -------------------------------------------------------------------------
-  mod.m.resize(NUMBER_OF_SCALES);
-  for (int i = 0; i < NUMBER_OF_SCALES; i++) {
+  mod.m.resize(n_escalas);
+  for (int i = 0; i < n_escalas; i++) {
     // Escala do modelo i (progressao geometrica entre os dois extremos).
-    float escala = 0.1721f * std::pow(0.0473f / 0.1721f, i / (float)(NUMBER_OF_SCALES - 1));
+    float escala = escala_max * std::pow(escala_min / escala_max, i / (float)(n_escalas - 1));
 
     // Lado do modelo em pixels.
     int lado = (int)std::round(T.rows * escala);
@@ -406,14 +417,21 @@ struct LeituraDigito {
 };
 
 // So le se a placa foi achada e estiver perto (escala <= ESCALA_PERTO).
+// lado_minimo < 0  -> criterio antigo (escala <= ESCALA_PERTO), usado no fase5;
+// lado_minimo > 0  -> exige que a placa tenha pelo menos esse lado em pixels;
+//                     e' o criterio do cliente6 (placa maior = mais perto).
 LeituraDigito le_digito(const cv::Mat_<COR>& a, const Modelos& mod, const Deteccao& det,
-                        ClassificadorDigitos& clf) {
+                        ClassificadorDigitos& clf, int lado_minimo = -1) {
   LeituraDigito r;
 
   // Sem placa ou placa longe: nao tenta ler.
   if (!det.achou) return r;
   int k = det.melhor;
-  if (det.escala[k] > ESCALA_PERTO) return r;
+  if (lado_minimo > 0) {
+    if (mod.m[det.escala[k]].cols < lado_minimo) return r;
+  } else {
+    if (det.escala[k] > ESCALA_PERTO) return r;
+  }
 
   // Calcula a janela do digito no quadro atual.
   cv::Rect j = janela_digito(mod, det.escala[k], det.pos[k], a.size());

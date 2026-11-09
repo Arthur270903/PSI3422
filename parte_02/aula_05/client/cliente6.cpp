@@ -58,16 +58,29 @@ constexpr int NC = 320;
 // legivel na tela do computador.
 constexpr int ESCALA_TELA = 2;
 
-// Controle proporcional para seguir a placa (igual ao cliente4):
+// Controle proporcional para seguir a placa: EXATAMENTE o do cliente4/aula 4.
 //   BASE  = velocidade media para frente;
 //   GANHO = quanto aumentar/diminuir a velocidade de cada roda quando a placa
 //           esta fora do centro.
-// GANHO maior corrige o desvio mais rapido (foi de 40 para 55).
-constexpr int BASE = 40, GANHO = 55;
+constexpr int BASE = 40, GANHO = 40;
 
-// Zona morta do controle: se a placa esta a menos de 3% do centro, as duas
-// rodas recebem BASE e o carrinho segue reto (evita ficar "serpenteando").
-constexpr float ZONA_MORTA = 0.03f;
+// Sentido da correcao de curva:
+//   +1 = como na aula 4 (placa a direita -> vira para a direita);
+//   -1 = invertido (nosso caso: a fiacao dos motores esta trocada).
+constexpr int SENTIDO_CURVA = -1;
+
+// Modelos da placa usados no cliente6: faixa ampliada em relacao ao fase5.
+// 14 modelos de ~120 px (bem perto) ate ~19 px (longe). Assim o carrinho pode
+// se aproximar mais antes de parar para ler o digito, e a placa grande ainda
+// e' encontrada.
+constexpr int   N_ESCALAS_CLIENTE  = 14;
+constexpr float ESCALA_MAX_CLIENTE = 0.30f;   // 401 * 0.30 = ~120 px
+constexpr float ESCALA_MIN_CLIENTE = 0.0473f; // ~19 px
+
+// So considera "perto" (para e le o digito) quando a placa tem pelo menos este
+// lado em pixels. Antes o criterio era escala <= 1 (~57-69 px); agora ~90 px,
+// ou seja, o carrinho chega mais perto e a janela do digito fica maior.
+constexpr int LADO_PERTO = 90;
 
 // Velocidades usadas nos movimentos comandados pelos digitos.
 constexpr int V_GIRO   = 70;   // velocidade das rodas ao girar no lugar
@@ -76,9 +89,9 @@ constexpr int V_FRENTE = 50;   // velocidade das rodas ao ir para frente
 // Tempos (em segundos) dos movimentos. Estes valores precisam ser CALIBRADOS
 // no carrinho real: dependem da bateria, do atrito, do peso etc.
 constexpr double T_PARADA   = 0.8;  // espera para o carrinho parar (inercia)
-constexpr double T_GIRO_90  = 0.80; // tempo para girar 90 graus (era 0.45)
-constexpr double T_GIRO_180 = 3.20; // tempo para girar 180 graus (era 0.90)
-constexpr double T_FRENTE   = 1.5;  // tempo para passar por baixo da placa
+constexpr double T_GIRO_90  = 1.80; // tempo para girar 90 graus (era 0.45)
+constexpr double T_GIRO_180 = 3.40; // tempo para girar 180 graus (era 0.90)
+constexpr double T_FRENTE   = 2.5;  // tempo para passar por baixo da placa
 
 // Quantas leituras do digito sao feitas antes de decidir. Vale o digito mais
 // votado; isso reduz o efeito de uma leitura errada isolada.
@@ -146,19 +159,21 @@ Movimento movimento_do_digito(int digito) {
 // mais devagar, fazendo o carrinho virar para a direita.
 // ---------------------------------------------------------------------------
 void segue_placa(float cx, int& esq, int& dir, int& dirx) {
-  float e = (cx - NC / 2.0f) / (NC / 2.0f);  // -1 (esquerda) .. +1 (direita)
-  dirx = cvRound(100 * e);
+  // Funcao de centralizacao da aula 4 (cliente4.cpp):
+  //   erro = -1 (placa na borda esquerda) .. +1 (borda direita)
+  //   placa a direita -> roda esquerda mais rapida, roda direita mais devagar.
+  float erro = (cx - NC / 2.0f) / (NC / 2.0f);
+  dirx = cvRound(100 * erro);   // valor "cru", so para mostrar na tela
 
-  // Perto do centro: segue reto com as duas rodas iguais. Isso evita que o
-  // controle fique corrigindo ruido de 1-2 pixels e "serpenteie".
-  if (std::fabs(e) < ZONA_MORTA) {
-    esq = dir = BASE;
-    return;
-  }
+  // SENTIDO_CURVA = -1 inverte a correcao.
+  // No nosso carrinho a correcao estava ao contrario: com a placa a direita
+  // ele virava para a esquerda. Isso acontece quando os motores esquerdo e
+  // direito estao ligados trocados no driver (ou a imagem da camera esta
+  // espelhada). Se algum dia trocar a fiacao, volte para +1.
+  erro *= SENTIDO_CURVA;
 
-  // Limita as velocidades em -100..100 para nao passar do que o PWM aceita.
-  esq = std::max(-100, std::min(100, cvRound(BASE + GANHO * e)));
-  dir = std::max(-100, std::min(100, cvRound(BASE - GANHO * e)));
+  esq = cvRound(BASE + GANHO * erro);
+  dir = cvRound(BASE - GANHO * erro);
 }
 
 // ---------------------------------------------------------------------------
@@ -187,7 +202,11 @@ int main(int argc, char* argv[]) {
   //
   // Os caminhos sao relativos: execute o programa a partir da pasta aula_05.
   // -------------------------------------------------------------------------
-  Modelos mod = carrega_modelos("assets/quadrado.png");
+  // Faixa ampliada: a placa pode ficar maior (mais perto) e ainda ser achada.
+  Modelos mod = carrega_modelos("assets/quadrado.png",
+                                N_ESCALAS_CLIENTE,
+                                ESCALA_MAX_CLIENTE,
+                                ESCALA_MIN_CLIENTE);
   ClassificadorDigitos clf(PASTA_MNIST);
 
   // -------------------------------------------------------------------------
@@ -271,7 +290,9 @@ int main(int argc, char* argv[]) {
       if (det.achou) {
         int k = det.melhor;
 
-        if (det.escala[k] <= ESCALA_PERTO) {
+        // "Perto" agora e' por TAMANHO da placa (>= LADO_PERTO px), e nao
+        // mais pelo indice da escala. Isso faz o carrinho chegar mais perto.
+        if (mod.m[det.escala[k]].cols >= LADO_PERTO) {
           // Placa grande: o carrinho esta perto. Para para nao colidir e para
           // poder ler o digito sem borrao de movimento.
           estado = PARA;
@@ -311,7 +332,7 @@ int main(int argc, char* argv[]) {
       det = detecta_placa(f, mod, limiar_ncc);
       detectou = true;
 
-      le = le_digito(a, mod, det, clf);
+      le = le_digito(a, mod, det, clf, LADO_PERTO);
 
       if (le.digito < 0) {
         // Nao conseguiu ler: volta a procurar a placa.
@@ -335,6 +356,13 @@ int main(int argc, char* argv[]) {
             mov = movimento_do_digito(digito);
             estado = MOVE;
             t0 = agora;
+
+            // Mostra no terminal qual movimento foi escolhido e por quanto
+            // tempo. Ajuda a calibrar e a descobrir se o digito lido era 2/3
+            // (180 graus) ou 6..9 (90 graus).
+            if (verboso)
+              printf("DECISAO digito=%d esq=%d dir=%d duracao=%.2fs\n",
+                     digito, mov.esq, mov.dir, mov.duracao);
           }
         }
       }
@@ -378,9 +406,9 @@ int main(int argc, char* argv[]) {
     if (verboso) {
       if (detectou && det.melhor >= 0) {
         int k = det.melhor;
-        printf("estado=%d achou=%d escala=%d cc=%.2f ncc=%.2f",
+        printf("estado=%d achou=%d escala=%d lado=%d cc=%.2f ncc=%.2f",
                (int)estado, (int)det.achou, det.escala[k],
-               det.cc[k], det.ncc[k]);
+               mod.m[det.escala[k]].cols, det.cc[k], det.ncc[k]);
         if (le.digito >= 0) printf(" digito=%d", le.digito);
         printf("\n");
       } else {
