@@ -1,0 +1,32 @@
+PACOTE DO RASPBERRY (tudo o que e' usado no Raspberry esta salvo nesta pasta)
+
+Arquivos:
+  server6.cpp    -> programa servidor (motores + camera + rede)
+  projeto.hpp    -> copia do projeto.hpp curto da aula_05 (classes SERVER/CLIENT)
+  raspberry.hpp  -> copia do raspberry.hpp curto da aula_05 (tipos BYTE/GRY/COR e erro)
+  server6_arm    -> copia do binario ARM ja compilado no Raspberry (nao roda no PC;
+                    serve para guardar/restaurar no Raspberry se precisar)
+
+IMPORTANTE:
+  - Estes arquivos sao copias. Os originais da aula_05 e da aula_04 nao foram
+    alterados.
+  - No Raspberry, a OpenCV instalada e' a 3.2; por isso o pkg-config se chama
+    "opencv" (e nao "opencv4").
+
+COMO COMPILAR NO RASPBERRY:
+  cd ~/labsit/aula_5/raspberry
+  g++ -O3 server6.cpp -o server6 $(pkg-config --cflags --libs opencv) -lwiringPi -lpthread
+
+COMO EXECUTAR NO RASPBERRY:
+  ./server6
+  (deixe este terminal aberto; o cliente6 no computador conecta na porta 3490)
+
+COMO COPIAR ESTA PASTA PARA O RASPBERRY (executar no computador):
+  scp -r raspberry pi@192.168.15.3:~/labsit/aula_5/
+
+OBSERVACOES:
+  - O servidor nao toma nenhuma decisao: ele apenas recebe velocidades do
+    cliente6 e aciona os motores.
+  - O atexit(desliga) garante que os motores param quando o programa termina
+    (fim normal, erro(), Ctrl+C ou queda da conexao).
+  - O pino 0..3 sao a numeracao wiringPi; confira a fiacao do seu carrinho.
