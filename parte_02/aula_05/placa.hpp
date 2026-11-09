@@ -148,23 +148,28 @@ struct Deteccao {
 };
 
 // Recebe o quadro em cinza float (f) e os modelos (mod).
-// Mesma logica do fase3p: CC -> 20 picos -> NCC -> melhor candidato.
-Deteccao detecta_placa(const cv::Mat_<float>& f, const Modelos& mod) {
+// Mesma logica do fase3p (aula 4): CC -> 20 picos -> NCC -> melhor candidato.
+//
+// O parametro limiar permite baixar/aumentar a exigencia do NCC sem mudar o
+// algoritmo. O valor padrao e' LIMIAR_NCC (0.55), o mesmo do fase3p da aula 4.
+Deteccao detecta_placa(const cv::Mat_<float>& f, const Modelos& mod,
+                       float limiar = LIMIAR_NCC) {
   const std::vector<cv::Mat_<float>>& models = mod.m;
+  const int n_escalas = (int)models.size();
   Deteccao det;
 
   // -------------------------------------------------------------------------
-  // (1) Calcula os mapas de correlacao cruzada (CC) para as 10 escalas.
+  // (1) Calcula os mapas de correlacao cruzada (CC) para todas as escalas.
   //
   // TM_CCORR e' a correlacao simples. Como os modelos foram normalizados por
   // somaAbsDois, os valores das escalas ficam comparaveis.
   //
-  // O "#pragma omp parallel for" distribui as 10 escalas entre as threads.
+  // O "#pragma omp parallel for" distribui as escalas entre as threads.
   // Cada iteracao escreve somente em cc[i], portanto nao ha condicao de corrida.
   // -------------------------------------------------------------------------
-  std::vector<cv::Mat_<float>> cc(NUMBER_OF_SCALES);
+  std::vector<cv::Mat_<float>> cc(n_escalas);
   #pragma omp parallel for
-  for (int i = 0; i < NUMBER_OF_SCALES; i++)
+  for (int i = 0; i < n_escalas; i++)
     cv::matchTemplate(f, models[i], cc[i], cv::TM_CCORR);
 
   // -------------------------------------------------------------------------
@@ -182,7 +187,7 @@ Deteccao detecta_placa(const cv::Mat_<float>& f, const Modelos& mod) {
     cv::Point melhor_pos;
 
     // Procura o maior valor de CC entre todas as escalas.
-    for (int i = 0; i < NUMBER_OF_SCALES; i++) {
+    for (int i = 0; i < n_escalas; i++) {
       double maximo; cv::Point p;
       cv::minMaxLoc(cc[i], nullptr, &maximo, nullptr, &p);
       if (maximo > maior) { maior = (float)maximo; melhor_escala = i; melhor_pos = p; }
@@ -202,7 +207,7 @@ Deteccao detecta_placa(const cv::Mat_<float>& f, const Modelos& mod) {
 
     // Apaga, em todas as escalas, os pixels a menos de 10 pixels do centro
     // do pico escolhido (raio ao quadrado < 100).
-    for (int i = 0; i < NUMBER_OF_SCALES; i++) {
+    for (int i = 0; i < n_escalas; i++) {
       int xt = cx - models[i].cols / 2;
       int yt = cy - models[i].rows / 2;
       for (int y = std::max(0, yt - 9); y <= std::min(cc[i].rows - 1, yt + 9); y++)
@@ -212,14 +217,14 @@ Deteccao detecta_placa(const cv::Mat_<float>& f, const Modelos& mod) {
   }
 
   // -------------------------------------------------------------------------
-  // (3) Calcula os mapas de NCC (correlacao normalizada) para as 10 escalas.
+  // (3) Calcula os mapas de NCC (correlacao normalizada) para todas as escalas.
   //
   // TM_CCOEFF_NORMED e' invariante a variacoes lineares de brilho/contraste,
   // por isso e' usado para CONFIRMAR se o candidato e' realmente a placa.
   // -------------------------------------------------------------------------
-  std::vector<cv::Mat_<float>> ncc(NUMBER_OF_SCALES);
+  std::vector<cv::Mat_<float>> ncc(n_escalas);
   #pragma omp parallel for
-  for (int i = 0; i < NUMBER_OF_SCALES; i++)
+  for (int i = 0; i < n_escalas; i++)
     cv::matchTemplate(f, models[i], ncc[i], cv::TM_CCOEFF_NORMED);
 
   // -------------------------------------------------------------------------
@@ -234,7 +239,7 @@ Deteccao detecta_placa(const cv::Mat_<float>& f, const Modelos& mod) {
   }
 
   // A placa so e' considerada localizada se o melhor NCC passar do limiar.
-  det.achou = (det.melhor >= 0 && maior_ncc > LIMIAR_NCC);
+  det.achou = (det.melhor >= 0 && maior_ncc > limiar);
   return det;
 }
 

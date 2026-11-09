@@ -39,9 +39,10 @@
 const int ESQ_F = 0, ESQ_T = 1, DIR_F = 2, DIR_T = 3;
 const int PINOS[4] = {ESQ_F, ESQ_T, DIR_F, DIR_T};
 
-// Fatores de calibracao de cada lado. Se um motor for mais fraco que o outro,
-// ajuste estes valores (por exemplo, 0.9 ou 1.1) para o carrinho andar reto.
-const double K_ESQ = 1.0, K_DIR = 1.0;
+// Fatores de calibracao de cada lado. O motor ESQUERDO do nosso carrinho e'
+// um pouco mais fraco, por isso K_ESQ = 1.20 (aumenta ~20% o comando dele).
+// Ajuste fino, se necessario: 1.10 / 1.15 / 1.25 / 1.30.
+const double K_ESQ = 1.20, K_DIR = 1.0;
 
 // Quantos quadros descartar antes de pegar o quadro mais recente. A camera
 // pode manter alguns quadros antigos no buffer; descartar evita enviar um
@@ -72,8 +73,17 @@ void motor(int pf, int pt, int v) {
 //   Os fatores K_ESQ/K_DIR corrigem diferencas mecanicas entre os motores.
 // ---------------------------------------------------------------------------
 void motores(int esq, int dir) {
-  motor(ESQ_F, ESQ_T, (int)(esq * K_ESQ));
-  motor(DIR_F, DIR_T, (int)(dir * K_DIR));
+  // Aplica o fator de calibracao e limita em -100..100. O limite e' necessario
+  // porque K_ESQ > 1 pode gerar valores fora da faixa do softPwm (0..100).
+  int v_esq = (int)(esq * K_ESQ);
+  int v_dir = (int)(dir * K_DIR);
+  if (v_esq >  100) v_esq =  100;
+  if (v_esq < -100) v_esq = -100;
+  if (v_dir >  100) v_dir =  100;
+  if (v_dir < -100) v_dir = -100;
+
+  motor(ESQ_F, ESQ_T, v_esq);
+  motor(DIR_F, DIR_T, v_dir);
 }
 
 // ---------------------------------------------------------------------------

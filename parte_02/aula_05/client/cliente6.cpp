@@ -16,13 +16,22 @@
 //       $(pkg-config --cflags --libs opencv4)
 //
 // EXECUTAR (dentro da pasta aula_05, para achar assets/):
-//   ./client/cliente6 192.168.15.3 [videosaida.avi] [t/c]
+//   ./client/cliente6 192.168.160.47 [videosaida.avi] [t/c]
 //
-//   - o primeiro argumento e' o IP do Raspberry (no nosso caso 192.168.15.3);
+//   - o primeiro argumento e' o IP do Raspberry;
 //   - o segundo (opcional) e' o video de saida;
 //   - o terceiro (opcional) e' o modo do video:
 //       't' = grava a tela de depuracao (quadro + painel + textos) [padrao];
 //       'c' = grava somente a imagem crua da camera.
+//
+// LIMIAR DE DETECCAO (opcional, via variavel de ambiente):
+//   O padrao e' NCC_MIN=0.55, igual ao fase3p da aula 4. O NCC do melhor
+//   candidato aparece no canto superior esquerdo da janela ("NCC: xx%").
+//   Se a placa aparece mas o NCC fica logo abaixo de 55%, pode-se afrouxar:
+//     NCC_MIN=0.50 ./client/cliente6 192.168.160.47
+//
+// JANELA: a visualizacao e' ampliada 2x (880x480); o video gravado continua
+// em 440x240.
 //
 // TECLA ESC: encerra o cliente e manda o servidor parar os motores.
 #include <omp.h>
@@ -44,21 +53,31 @@
 constexpr int NL = 240;
 constexpr int NC = 320;
 
+// Fator de ampliacao SOMENTE da janela de visualizacao (imshow). O video
+// gravado continua em 440x240; a janela aparece com 880x480 para ficar
+// legivel na tela do computador.
+constexpr int ESCALA_TELA = 2;
+
 // Controle proporcional para seguir a placa (igual ao cliente4):
 //   BASE  = velocidade media para frente;
 //   GANHO = quanto aumentar/diminuir a velocidade de cada roda quando a placa
 //           esta fora do centro.
-constexpr int BASE = 40, GANHO = 40;
+// GANHO maior corrige o desvio mais rapido (foi de 40 para 55).
+constexpr int BASE = 40, GANHO = 55;
+
+// Zona morta do controle: se a placa esta a menos de 3% do centro, as duas
+// rodas recebem BASE e o carrinho segue reto (evita ficar "serpenteando").
+constexpr float ZONA_MORTA = 0.03f;
 
 // Velocidades usadas nos movimentos comandados pelos digitos.
-constexpr int V_GIRO   = 60;   // velocidade das rodas ao girar no lugar
+constexpr int V_GIRO   = 70;   // velocidade das rodas ao girar no lugar
 constexpr int V_FRENTE = 50;   // velocidade das rodas ao ir para frente
 
 // Tempos (em segundos) dos movimentos. Estes valores precisam ser CALIBRADOS
 // no carrinho real: dependem da bateria, do atrito, do peso etc.
 constexpr double T_PARADA   = 0.8;  // espera para o carrinho parar (inercia)
-constexpr double T_GIRO_90  = 0.45; // tempo para girar 90 graus
-constexpr double T_GIRO_180 = 0.90; // tempo para girar 180 graus
+constexpr double T_GIRO_90  = 0.80; // tempo para girar 90 graus (era 0.45)
+constexpr double T_GIRO_180 = 3.20; // tempo para girar 180 graus (era 0.90)
 constexpr double T_FRENTE   = 1.5;  // tempo para passar por baixo da placa
 
 // Quantas leituras do digito sao feitas antes de decidir. Vale o digito mais
@@ -130,6 +149,13 @@ void segue_placa(float cx, int& esq, int& dir, int& dirx) {
   float e = (cx - NC / 2.0f) / (NC / 2.0f);  // -1 (esquerda) .. +1 (direita)
   dirx = cvRound(100 * e);
 
+  // Perto do centro: segue reto com as duas rodas iguais. Isso evita que o
+  // controle fique corrigindo ruido de 1-2 pixels e "serpenteie".
+  if (std::fabs(e) < ZONA_MORTA) {
+    esq = dir = BASE;
+    return;
+  }
+
   // Limita as velocidades em -100..100 para nao passar do que o PWM aceita.
   esq = std::max(-100, std::min(100, cvRound(BASE + GANHO * e)));
   dir = std::max(-100, std::min(100, cvRound(BASE - GANHO * e)));
@@ -148,6 +174,13 @@ int main(int argc, char* argv[]) {
 
   bool gravar = (argc >= 3);                  // tem video de saida?
   char modo = (argc >= 4) ? argv[3][0] : 't'; // 't' = tela, 'c' = camera crua
+
+  // Limiar do NCC usado para considerar que a placa foi encontrada.
+  // O padrao e' 0.55, igual ao fase3p da aula 4. Para testes com iluminacao
+  // ruim, pode-se baixar sem recompilar, por exemplo:
+  //   NCC_MIN=0.45 ./client/cliente6 192.168.160.47
+  float limiar_ncc = LIMIAR_NCC;
+  if (const char* s = getenv("NCC_MIN")) limiar_ncc = (float)atof(s);
 
   // -------------------------------------------------------------------------
   // 2) Carrega os modelos da placa e o classificador de digitos.
@@ -172,6 +205,13 @@ int main(int argc, char* argv[]) {
   Mat_<float> f;
   VideoWriter vo;
   bool mostrar = (getenv("DISPLAY") != nullptr);
+
+  // Modo de diagnostico (nao altera a logica normal):
+  //   SEM_MOTOR=1 -> envia sempre velocidade 0 (o carrinho NAO anda);
+  //   VERBOSE=1   -> imprime estado, escala, NCC e digito de cada quadro.
+  // Uso: SEM_MOTOR=1 VERBOSE=1 ./client/cliente6 192.168.160.47
+  const bool sem_motor = (getenv("SEM_MOTOR") != nullptr);
+  const bool verboso   = (getenv("VERBOSE")   != nullptr);
   if (mostrar) namedWindow("janela");
 
   // Painel lateral inicial vazio (largura 120, altura NL).
@@ -225,7 +265,7 @@ int main(int argc, char* argv[]) {
     // ---------------------------------------------------------------------
     if (estado == PROCURA) {
       converte(a, f);
-      det = detecta_placa(f, mod);
+      det = detecta_placa(f, mod, limiar_ncc);
       detectou = true;
 
       if (det.achou) {
@@ -268,7 +308,7 @@ int main(int argc, char* argv[]) {
     // ---------------------------------------------------------------------
     else if (estado == LE_DIGITO) {
       converte(a, f);
-      det = detecta_placa(f, mod);
+      det = detecta_placa(f, mod, limiar_ncc);
       detectou = true;
 
       le = le_digito(a, mod, det, clf);
@@ -330,6 +370,26 @@ int main(int argc, char* argv[]) {
     // O ESTADO 4 (FIM) e' tratado no final do laco, depois de montar a tela.
 
     // ---------------------------------------------------------------------
+    // 7b) Diagnostico no terminal (apenas com VERBOSE=1).
+    //
+    // Mostra o que a deteccao viu neste quadro. Serve para descobrir se o
+    // problema e' "nao achar a placa" (NCC baixo) ou "achar mas nao ler".
+    // ---------------------------------------------------------------------
+    if (verboso) {
+      if (detectou && det.melhor >= 0) {
+        int k = det.melhor;
+        printf("estado=%d achou=%d escala=%d cc=%.2f ncc=%.2f",
+               (int)estado, (int)det.achou, det.escala[k],
+               det.cc[k], det.ncc[k]);
+        if (le.digito >= 0) printf(" digito=%d", le.digito);
+        printf("\n");
+      } else {
+        printf("estado=%d sem-placa\n", (int)estado);
+      }
+      fflush(stdout);
+    }
+
+    // ---------------------------------------------------------------------
     // 8) Tela de depuracao.
     // ---------------------------------------------------------------------
     a.copyTo(d);
@@ -348,7 +408,13 @@ int main(int argc, char* argv[]) {
     hconcat(d, painel, tela);
 
     // Mostra a janela (somente se houver interface grafica).
-    if (mostrar) imshow("janela", tela);
+    // A imagem e' ampliada ESCALA_TELA vezes SO para visualizacao; o video
+    // gravado abaixo continua com 440x240.
+    if (mostrar) {
+      Mat_<COR> tela_grande;
+      resize(tela, tela_grande, Size(), ESCALA_TELA, ESCALA_TELA, INTER_NEAREST);
+      imshow("janela", tela_grande);
+    }
 
     // ---------------------------------------------------------------------
     // 9) Gravacao do video de saida (opcional).
@@ -386,6 +452,9 @@ int main(int argc, char* argv[]) {
     // O servidor executa as velocidades e devolve o proximo quadro. Por isso
     // o laco e' sincrono: um comando -> um quadro.
     // ---------------------------------------------------------------------
+    // No modo de diagnostico, zera as velocidades para o carrinho ficar parado.
+    if (sem_motor) esq = dir = 0;
+
     cmd[0] = '0';
     cmd[1] = esq + 100;
     cmd[2] = dir + 100;
