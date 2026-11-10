@@ -4,29 +4,32 @@ Arquivos:
   server6.cpp    -> programa servidor (motores + camera + rede)
   projeto.hpp    -> copia do projeto.hpp curto da aula_05 (classes SERVER/CLIENT)
   raspberry.hpp  -> copia do raspberry.hpp curto da aula_05 (tipos BYTE/GRY/COR e erro)
-  server6_arm    -> copia do binario ARM ja compilado no Raspberry (nao roda no PC;
-                    serve para guardar/restaurar no Raspberry se precisar)
 
 IMPORTANTE:
   - Estes arquivos sao copias. Os originais da aula_05 e da aula_04 nao foram
     alterados.
   - No Raspberry, a OpenCV instalada e' a 3.2; por isso o pkg-config se chama
     "opencv" (e nao "opencv4").
+  - O binario ARM e' compilado direto no Raspberry (nao rode o .cpp no PC: ele
+    usa wiringPi).
+
+COMO COPIAR PARA O RASPBERRY (executar no PC, dentro de aula_05):
+  scp raspberry/server6.cpp pi@192.168.160.47:~/labsit/aula_5/
+  (a pasta no Raspberry e' plana: ~/labsit/aula_5)
 
 COMO COMPILAR NO RASPBERRY:
-  cd ~/labsit/aula_5/raspberry
+  cd ~/labsit/aula_5
   g++ -O3 server6.cpp -o server6 $(pkg-config --cflags --libs opencv) -lwiringPi -lpthread
 
 COMO EXECUTAR NO RASPBERRY:
   ./server6
   (deixe este terminal aberto; o cliente6 no computador conecta na porta 3490)
 
-COMO COPIAR ESTA PASTA PARA O RASPBERRY (executar no computador):
-  scp -r raspberry pi@192.168.15.3:~/labsit/aula_5/
-
 OBSERVACOES:
   - O servidor nao toma nenhuma decisao: ele apenas recebe velocidades do
     cliente6 e aciona os motores.
+  - K_ESQ/K_DIR em server6.cpp compensam diferencas entre os motores. O nosso
+    motor esquerdo e' mais fraco, por isso K_ESQ = 1.20.
   - O atexit(desliga) garante que os motores param quando o programa termina
     (fim normal, erro(), Ctrl+C ou queda da conexao).
-  - O pino 0..3 sao a numeracao wiringPi; confira a fiacao do seu carrinho.
+  - Os pinos 0..3 sao a numeracao wiringPi; confira a fiacao do seu carrinho.

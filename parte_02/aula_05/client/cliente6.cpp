@@ -1,175 +1,96 @@
-//cliente6.cpp -- Licao de casa 2 da fase 5 (vale 5): cliente (computador).
+//cliente6.cpp -- Licao de casa 2 da fase 5: cliente (computador).
 //
-// O QUE O PROGRAMA FAZ:
-//   - conecta no servidor6 que roda no Raspberry (porta 3490);
-//   - recebe os quadros da camera enviados pelo Raspberry;
-//   - localiza a placa e, quando ela esta grande (escala 0 ou 1), le o digito;
-//   - usa uma MAQUINA DE ESTADOS FINITA (figura 6 do enunciado) para decidir
-//     quando seguir a placa, parar, ler o digito, executar o movimento e voltar
-//     a procurar a proxima placa;
-//   - envia ao Raspberry comandos de 3 bytes: {cmd, velocidade_esq+100,
-//     velocidade_dir+100}. O Raspberry apenas executa o comando; toda a logica
-//     fica aqui no computador.
+// Conecta no servidor6 do Raspberry (porta 3490), recebe os quadros da camera,
+// localiza a placa, le o digito e executa o movimento correspondente. Toda a
+// logica fica aqui; o Raspberry so obedece aos comandos de 3 bytes:
+//   {cmd, velocidade_esq+100, velocidade_dir+100}
 //
-// COMPILAR (no computador, dentro da pasta aula_05):
+// COMPILAR (dentro de aula_05):
 //   g++ -O3 -fopenmp -std=c++11 client/cliente6.cpp -o client/cliente6 \
 //       $(pkg-config --cflags --libs opencv4)
 //
-// EXECUTAR (dentro da pasta aula_05, para achar assets/):
+// EXECUTAR (dentro de aula_05, para achar assets/):
 //   ./client/cliente6 192.168.160.47 [videosaida.avi] [t/c]
+//   't' = grava a tela com deteccao + painel (padrao); 'c' = camera crua.
 //
-//   - o primeiro argumento e' o IP do Raspberry;
-//   - o segundo (opcional) e' o video de saida;
-//   - o terceiro (opcional) e' o modo do video:
-//       't' = grava a tela de depuracao (quadro + painel + textos) [padrao];
-//       'c' = grava somente a imagem crua da camera.
-//
-// LIMIAR DE DETECCAO (opcional, via variavel de ambiente):
-//   O padrao e' NCC_MIN=0.55, igual ao fase3p da aula 4. O NCC do melhor
-//   candidato aparece no canto superior esquerdo da janela ("NCC: xx%").
-//   Se a placa aparece mas o NCC fica logo abaixo de 55%, pode-se afrouxar:
-//     NCC_MIN=0.50 ./client/cliente6 192.168.160.47
-//
-// JANELA: a visualizacao e' ampliada 2x (880x480); o video gravado continua
-// em 440x240.
-//
-// TECLA ESC: encerra o cliente e manda o servidor parar os motores.
+// Tecla ESC encerra e manda o servidor parar os motores.
 #include <omp.h>
 #include <cstdlib>
 
-// Inclui a versao COMPLETA do projeto.hpp/raspberry.hpp (com MNIST, MnistFlann,
-// CLIENT, converte, somaAbsDois, dcReject etc.). Ela esta na copia lib/; os
-// arquivos originais da aula_05 e da aula_04 nao foram alterados.
+// Copia completa do projeto.hpp/raspberry.hpp (MNIST, MnistFlann, CLIENT,
+// converte, somaAbsDois, dcReject etc.).
 #include "../lib/projeto.hpp"
 
-// Biblioteca de deteccao da placa e leitura do digito.
+// Deteccao da placa e leitura do digito.
 #include "../placa.hpp"
 
 // ---------------------------------------------------------------------------
-// Constantes de configuracao
+// Configuracao
 // ---------------------------------------------------------------------------
 
-// Tamanho do quadro recebido do Raspberry.
-constexpr int NL = 240;
-constexpr int NC = 320;
+constexpr int NL = 240;   // altura do quadro recebido
+constexpr int NC = 320;   // largura do quadro recebido
 
-// Fator de ampliacao SOMENTE da janela de visualizacao (imshow). O video
-// gravado continua em 440x240; a janela aparece com 880x480 para ficar
-// legivel na tela do computador.
+// Ampliacao SOMENTE da janela (o video gravado continua 440x240).
 constexpr int ESCALA_TELA = 2;
 
-// Controle proporcional para seguir a placa: EXATAMENTE o do cliente4/aula 4.
-//   BASE  = velocidade media para frente;
-//   GANHO = quanto aumentar/diminuir a velocidade de cada roda quando a placa
-//           esta fora do centro.
+// Controle proporcional de centralizacao (igual ao cliente4/aula 4):
+// BASE = velocidade media; GANHO = correcao quando a placa esta fora do centro.
 constexpr int BASE = 40, GANHO = 40;
 
-// Sentido da correcao de curva:
-//   +1 = como na aula 4 (placa a direita -> vira para a direita);
-//   -1 = invertido (nosso caso: a fiacao dos motores esta trocada).
+// Sentido da curva: +1 como na aula 4; -1 inverte (fiacao dos motores trocada).
 constexpr int SENTIDO_CURVA = -1;
 
-// Modelos da placa usados no cliente6: faixa ampliada em relacao ao fase5.
-// 14 modelos de ~120 px (bem perto) ate ~19 px (longe). Assim o carrinho pode
-// se aproximar mais antes de parar para ler o digito, e a placa grande ainda
-// e' encontrada.
+// Modelos ampliados: 14 escalas de ~120 px (perto) a ~19 px (longe). Permite
+// chegar mais perto antes de parar para ler o digito.
 constexpr int   N_ESCALAS_CLIENTE  = 14;
 constexpr float ESCALA_MAX_CLIENTE = 0.30f;   // 401 * 0.30 = ~120 px
 constexpr float ESCALA_MIN_CLIENTE = 0.0473f; // ~19 px
 
-// So considera "perto" (para e le o digito) quando a placa tem pelo menos este
-// lado em pixels. Antes o criterio era escala <= 1 (~57-69 px); agora ~90 px,
-// ou seja, o carrinho chega mais perto e a janela do digito fica maior.
+// Para e le o digito quando a placa tem pelo menos este lado em pixels.
 constexpr int LADO_PERTO = 90;
 
-// Velocidades usadas nos movimentos comandados pelos digitos.
-constexpr int V_GIRO   = 70;   // velocidade das rodas ao girar no lugar
-constexpr int V_FRENTE = 50;   // velocidade das rodas ao ir para frente
+// Velocidades e tempos dos movimentos (calibrar no carrinho real).
+constexpr int    V_GIRO     = 70;
+constexpr int    V_FRENTE   = 50;
+constexpr double T_PARADA   = 0.8;   // espera a inercia acabar
+constexpr double T_GIRO_90  = 1.80;  // giro de 90 graus
+constexpr double T_GIRO_180 = 3.40;  // giro de 180 graus
+constexpr double T_FRENTE   = 2.5;   // passar por baixo da placa
 
-// Tempos (em segundos) dos movimentos. Estes valores precisam ser CALIBRADOS
-// no carrinho real: dependem da bateria, do atrito, do peso etc.
-constexpr double T_PARADA   = 0.8;  // espera para o carrinho parar (inercia)
-constexpr double T_GIRO_90  = 1.80; // tempo para girar 90 graus (era 0.45)
-constexpr double T_GIRO_180 = 3.40; // tempo para girar 180 graus (era 0.90)
-constexpr double T_FRENTE   = 2.5;  // tempo para passar por baixo da placa
-
-// Quantas leituras do digito sao feitas antes de decidir. Vale o digito mais
-// votado; isso reduz o efeito de uma leitura errada isolada.
+// Leituras antes de decidir (vale o digito mais votado).
 constexpr int VOTOS = 3;
 
 // ---------------------------------------------------------------------------
-// Estados da maquina de estados finita (numeracao da figura 6 do enunciado).
-//
-//   PROCURA   (0): procura a placa e segue em direcao a ela;
-//   PARA      (1): para os motores e espera o carrinho parar;
-//   LE_DIGITO (2): le o digito com o carrinho parado;
-//   MOVE      (3): executa o movimento indicado pelo digito;
-//   FIM       (4): digito 0 ou 1 -> termina o programa;
-//   ESPERA    (5): espera o movimento cessar e volta para PROCURA.
+// Maquina de estados (figura 6 do enunciado)
 // ---------------------------------------------------------------------------
 enum Estado { PROCURA = 0, PARA = 1, LE_DIGITO = 2, MOVE = 3, FIM = 4, ESPERA = 5 };
 
-// Um movimento e' composto por:
-//   esq, dir = velocidades das rodas esquerda/direita (-100..100);
-//   duracao  = quanto tempo o comando fica ativo (segundos).
 struct Movimento {
-  int esq;
-  int dir;
-  double duracao;
+  int esq, dir;       // velocidades -100..100
+  double duracao;     // segundos
 };
 
-// ---------------------------------------------------------------------------
-// Tabela digito -> movimento (comandos de 2025 do enunciado):
-//
-//   0 ou 1: pare o carrinho (fim do programa);
-//   2:      vire 180 graus a esquerda imediatamente;
-//   3:      vire 180 graus a direita imediatamente;
-//   4 ou 5: passe por baixo da placa e continue em frente;
-//   6 ou 7: vire 90 graus a esquerda imediatamente;
-//   8 ou 9: vire 90 graus a direita imediatamente.
-//
-// Para girar no lugar, as rodas giram em sentidos opostos:
-//   - esquerda = -V e direita = +V  -> gira para a esquerda;
-//   - esquerda = +V e direita = -V  -> gira para a direita.
-// ---------------------------------------------------------------------------
+// Tabela digito -> movimento:
+//   0,1: para (fim);  2,3: 180 graus;  4,5: em frente;
+//   6,7: 90 graus a esquerda;  8,9: 90 graus a direita.
+// Rodas em sentidos opostos giram no lugar; iguais andam reto.
 Movimento movimento_do_digito(int digito) {
   switch (digito) {
-    case 2:  return { -V_GIRO, +V_GIRO, T_GIRO_180 };          // 180 graus a esquerda
-    case 3:  return { +V_GIRO, -V_GIRO, T_GIRO_180 };          // 180 graus a direita
-    case 4: case 5: return { V_FRENTE, V_FRENTE, T_FRENTE };   // passa por baixo e segue
-    case 6: case 7: return { -V_GIRO, +V_GIRO, T_GIRO_90 };    // 90 graus a esquerda
-    case 8: case 9: return { +V_GIRO, -V_GIRO, T_GIRO_90 };    // 90 graus a direita
+    case 2:  return { -V_GIRO, +V_GIRO, T_GIRO_180 };
+    case 3:  return { +V_GIRO, -V_GIRO, T_GIRO_180 };
+    case 4: case 5: return { V_FRENTE, V_FRENTE, T_FRENTE };
+    case 6: case 7: return { -V_GIRO, +V_GIRO, T_GIRO_90 };
+    case 8: case 9: return { +V_GIRO, -V_GIRO, T_GIRO_90 };
   }
-
-  // 0, 1 ou qualquer valor inesperado: fica parado.
   return { 0, 0, 0 };
 }
 
-// ---------------------------------------------------------------------------
-// Controle proporcional para seguir a placa.
-//
-// Recebe cx = coordenada x do centro da placa no quadro.
-// Calcula:
-//   e    = erro normalizado (-1 = placa na borda esquerda, +1 = borda direita);
-//   dirx = erro em porcentagem (so para mostrar na tela);
-//   esq  = velocidade da roda esquerda;
-//   dir  = velocidade da roda direita.
-//
-// Se a placa esta a direita (e>0), a roda esquerda anda mais rapido e a direita
-// mais devagar, fazendo o carrinho virar para a direita.
-// ---------------------------------------------------------------------------
-void segue_placa(float cx, int& esq, int& dir, int& dirx) {
-  // Funcao de centralizacao da aula 4 (cliente4.cpp):
-  //   erro = -1 (placa na borda esquerda) .. +1 (borda direita)
-  //   placa a direita -> roda esquerda mais rapida, roda direita mais devagar.
+// Centralizacao da aula 4: erro -1 (placa na esquerda) .. +1 (na direita).
+// SENTIDO_CURVA inverte a atuacao, caso os motores estejam trocados.
+void segue_placa(float cx, int& esq, int& dir) {
   float erro = (cx - NC / 2.0f) / (NC / 2.0f);
-  dirx = cvRound(100 * erro);   // valor "cru", so para mostrar na tela
 
-  // SENTIDO_CURVA = -1 inverte a correcao.
-  // No nosso carrinho a correcao estava ao contrario: com a placa a direita
-  // ele virava para a esquerda. Isso acontece quando os motores esquerdo e
-  // direito estao ligados trocados no driver (ou a imagem da camera esta
-  // espelhada). Se algum dia trocar a fiacao, volte para +1.
   erro *= SENTIDO_CURVA;
 
   esq = cvRound(BASE + GANHO * erro);
@@ -180,135 +101,72 @@ void segue_placa(float cx, int& esq, int& dir, int& dirx) {
 // Programa principal
 // ---------------------------------------------------------------------------
 int main(int argc, char* argv[]) {
-  // -------------------------------------------------------------------------
-  // 1) Linha de comando.
-  // -------------------------------------------------------------------------
   if (argc < 2)
     erro("Uso: cliente6 IP [videosaida.avi] [t/c]\n"
-         "Exemplo: ./client/cliente6 192.168.15.3 saida.avi t");
+         "Exemplo: ./client/cliente6 192.168.160.47 saida.avi t");
 
-  bool gravar = (argc >= 3);                  // tem video de saida?
-  char modo = (argc >= 4) ? argv[3][0] : 't'; // 't' = tela, 'c' = camera crua
+  bool gravar = (argc >= 3);
+  char modo = (argc >= 4) ? argv[3][0] : 't';
 
-  // Limiar do NCC usado para considerar que a placa foi encontrada.
-  // O padrao e' 0.55, igual ao fase3p da aula 4. Para testes com iluminacao
-  // ruim, pode-se baixar sem recompilar, por exemplo:
-  //   NCC_MIN=0.45 ./client/cliente6 192.168.160.47
-  float limiar_ncc = LIMIAR_NCC;
-  if (const char* s = getenv("NCC_MIN")) limiar_ncc = (float)atof(s);
-
-  // -------------------------------------------------------------------------
-  // 2) Carrega os modelos da placa e o classificador de digitos.
-  //
-  // Os caminhos sao relativos: execute o programa a partir da pasta aula_05.
-  // -------------------------------------------------------------------------
-  // Faixa ampliada: a placa pode ficar maior (mais perto) e ainda ser achada.
+  // Modelos da placa (faixa ampliada) e classificador do MNIST.
   Modelos mod = carrega_modelos("assets/quadrado.png",
                                 N_ESCALAS_CLIENTE,
                                 ESCALA_MAX_CLIENTE,
                                 ESCALA_MIN_CLIENTE);
   ClassificadorDigitos clf(PASTA_MNIST);
 
-  // -------------------------------------------------------------------------
-  // 3) Conecta ao servidor6 no Raspberry.
-  // -------------------------------------------------------------------------
+  // Conexao com o servidor6 do Raspberry.
   CLIENT client(argv[1]);
 
-  // -------------------------------------------------------------------------
-  // 4) Variaveis de tela/gravacao.
-  //
-  // "mostrar" permite rodar sem interface grafica (por exemplo, em um teste
-  // automatico). Se DISPLAY nao existir, nao chamamos imshow/namedWindow.
-  // -------------------------------------------------------------------------
   Mat_<COR> a, d, tela;
   Mat_<float> f;
   VideoWriter vo;
   bool mostrar = (getenv("DISPLAY") != nullptr);
-
-  // Modo de diagnostico (nao altera a logica normal):
-  //   SEM_MOTOR=1 -> envia sempre velocidade 0 (o carrinho NAO anda);
-  //   VERBOSE=1   -> imprime estado, escala, NCC e digito de cada quadro.
-  // Uso: SEM_MOTOR=1 VERBOSE=1 ./client/cliente6 192.168.160.47
-  const bool sem_motor = (getenv("SEM_MOTOR") != nullptr);
-  const bool verboso   = (getenv("VERBOSE")   != nullptr);
   if (mostrar) namedWindow("janela");
 
-  // Painel lateral inicial vazio (largura 120, altura NL).
   Mat_<COR> painel = monta_painel(Mat_<COR>(), Mat_<uchar>(), -1, NL);
 
-  // -------------------------------------------------------------------------
-  // 5) Estado inicial da maquina de estados.
-  // -------------------------------------------------------------------------
   Estado estado = PROCURA;
-  double t0 = 0;                    // cronometro do estado atual
-  int votos[10] = {0}, nvotos = 0;  // contagem de leituras do digito
-  int digito = -1;                  // ultimo digito decidido
-  Movimento mov = {0, 0, 0};        // movimento atual
+  double t0 = 0;
+  int votos[10] = {0}, nvotos = 0;
+  int digito = -1;
+  Movimento mov = {0, 0, 0};
 
-  // -------------------------------------------------------------------------
-  // 6) Protocolo com o servidor6:
-  //
-  //    cmd[0] = '0' para executar; 's' para encerrar;
-  //    cmd[1] = velocidade da roda esquerda + 100 (0..200);
-  //    cmd[2] = velocidade da roda direita  + 100 (0..200).
-  //
-  // O servidor responde a cada comando com um novo quadro JPEG. O primeiro
-  // comando e' enviado parado (100-100=0) so para pedir o primeiro quadro.
-  // -------------------------------------------------------------------------
+  // Protocolo: '0' executa, 's' encerra; velocidades +100 (0..200).
+  // O primeiro comando (parado) so pede o primeiro quadro.
   BYTE cmd[3] = { '0', 100, 100 };
-  client.sendBytes(3, cmd);  // pede o primeiro quadro
+  client.sendBytes(3, cmd);
 
-  // -------------------------------------------------------------------------
-  // 7) Laco principal: recebe um quadro, decide o comando e envia.
-  // -------------------------------------------------------------------------
   while (true) {
-    // Recebe o quadro mais recente do Raspberry (JPEG comprimido).
     client.receiveImgComp(a);
     if (a.empty()) erro("quadro vazio");
 
-    // Tempo atual, usado pelos cronometros dos estados.
     double agora = timeSinceEpoch();
 
-    // Por padrao, o comando e' "parado".
-    int esq = 0, dir = 0, dirx = 0;
+    int esq = 0, dir = 0;
     bool detectou = false;
     Deteccao det;
     LeituraDigito le;
 
-    // ---------------------------------------------------------------------
-    // ESTADO 0 (PROCURA): procura a placa e segue em direcao a ela.
-    //
-    // - Se nao achou placa: continua parado (esq=dir=0).
-    // - Se achou placa pequena (escala > 1): segue a placa pelo centro.
-    // - Se achou placa grande (escala 0 ou 1): para e vai para o estado 1.
-    // ---------------------------------------------------------------------
+    // ESTADO 0 (PROCURA): segue a placa; se ela estiver grande, vai para PARA.
     if (estado == PROCURA) {
       converte(a, f);
-      det = detecta_placa(f, mod, limiar_ncc);
+      det = detecta_placa(f, mod);
       detectou = true;
 
       if (det.achou) {
         int k = det.melhor;
-
-        // "Perto" agora e' por TAMANHO da placa (>= LADO_PERTO px), e nao
-        // mais pelo indice da escala. Isso faz o carrinho chegar mais perto.
         if (mod.m[det.escala[k]].cols >= LADO_PERTO) {
-          // Placa grande: o carrinho esta perto. Para para nao colidir e para
-          // poder ler o digito sem borrao de movimento.
           estado = PARA;
           t0 = agora;
         } else {
-          // Placa pequena: segue em direcao a ela.
           float cx = det.pos[k].x + mod.m[det.escala[k]].cols / 2.0f;
-          segue_placa(cx, esq, dir, dirx);
+          segue_placa(cx, esq, dir);
         }
       }
-      // Se nao achou placa, esq=dir=0 (parado).
     }
 
-    // ---------------------------------------------------------------------
-    // ESTADO 1 (PARA): espera o carrinho parar completamente (inercia).
-    // ---------------------------------------------------------------------
+    // ESTADO 1 (PARA): espera o carrinho parar e vai ler o digito.
     else if (estado == PARA) {
       if (agora - t0 >= T_PARADA) {
         estado = LE_DIGITO;
@@ -317,64 +175,36 @@ int main(int argc, char* argv[]) {
       }
     }
 
-    // ---------------------------------------------------------------------
-    // ESTADO 2 (LE_DIGITO): le o digito com o carrinho parado.
-    //
-    // - Se nao conseguir ler (placa sumiu, digito ilegivel etc.): volta ao
-    //   estado 0.
-    // - Se ler: acumula o voto. Depois de VOTOS leituras, decide pelo digito
-    //   mais votado.
-    //     * digito 0 ou 1 -> estado 4 (FIM);
-    //     * outros        -> monta o movimento e vai para o estado 3.
-    // ---------------------------------------------------------------------
+    // ESTADO 2 (LE_DIGITO): acumula VOTOS leituras e decide pelo mais votado.
     else if (estado == LE_DIGITO) {
       converte(a, f);
-      det = detecta_placa(f, mod, limiar_ncc);
+      det = detecta_placa(f, mod);
       detectou = true;
 
       le = le_digito(a, mod, det, clf, LADO_PERTO);
 
       if (le.digito < 0) {
-        // Nao conseguiu ler: volta a procurar a placa.
         estado = PROCURA;
       } else {
-        // Atualiza o painel de depuracao com a leitura atual.
         painel = monta_painel(le.recorte, le.d14, le.digito, NL);
-
         votos[le.digito]++;
         nvotos++;
 
         if (nvotos >= VOTOS) {
-          // Escolhe o digito com mais votos (max_element devolve o iterador).
           digito = (int)(std::max_element(votos, votos + 10) - votos);
 
           if (digito <= 1) {
-            // 0 ou 1: pare e termine o programa.
             estado = FIM;
           } else {
-            // 2..9: executa o movimento correspondente.
             mov = movimento_do_digito(digito);
             estado = MOVE;
             t0 = agora;
-
-            // Mostra no terminal qual movimento foi escolhido e por quanto
-            // tempo. Ajuda a calibrar e a descobrir se o digito lido era 2/3
-            // (180 graus) ou 6..9 (90 graus).
-            if (verboso)
-              printf("DECISAO digito=%d esq=%d dir=%d duracao=%.2fs\n",
-                     digito, mov.esq, mov.dir, mov.duracao);
           }
         }
       }
     }
 
-    // ---------------------------------------------------------------------
-    // ESTADO 3 (MOVE): executa o movimento indicado pelo digito.
-    //
-    // O comando e' reenviado a cada quadro (o servidor so executa o ultimo
-    // comando recebido). Quando o tempo programado termina, manda parar e vai
-    // para o estado 5.
-    // ---------------------------------------------------------------------
+    // ESTADO 3 (MOVE): mantem o movimento ate o tempo terminar.
     else if (estado == MOVE) {
       esq = mov.esq;
       dir = mov.dir;
@@ -386,70 +216,25 @@ int main(int argc, char* argv[]) {
       }
     }
 
-    // ---------------------------------------------------------------------
-    // ESTADO 5 (ESPERA): espera o movimento cessar completamente (inercia)
-    // e volta para o estado 0.
-    // ---------------------------------------------------------------------
+    // ESTADO 5 (ESPERA): espera a inercia e volta a procurar.
     else if (estado == ESPERA) {
       if (agora - t0 >= T_PARADA)
         estado = PROCURA;
     }
 
-    // O ESTADO 4 (FIM) e' tratado no final do laco, depois de montar a tela.
-
-    // ---------------------------------------------------------------------
-    // 7b) Diagnostico no terminal (apenas com VERBOSE=1).
-    //
-    // Mostra o que a deteccao viu neste quadro. Serve para descobrir se o
-    // problema e' "nao achar a placa" (NCC baixo) ou "achar mas nao ler".
-    // ---------------------------------------------------------------------
-    if (verboso) {
-      if (detectou && det.melhor >= 0) {
-        int k = det.melhor;
-        printf("estado=%d achou=%d escala=%d lado=%d cc=%.2f ncc=%.2f",
-               (int)estado, (int)det.achou, det.escala[k],
-               mod.m[det.escala[k]].cols, det.cc[k], det.ncc[k]);
-        if (le.digito >= 0) printf(" digito=%d", le.digito);
-        printf("\n");
-      } else {
-        printf("estado=%d sem-placa\n", (int)estado);
-      }
-      fflush(stdout);
-    }
-
-    // ---------------------------------------------------------------------
-    // 8) Tela de depuracao.
-    // ---------------------------------------------------------------------
+    // Monta a tela: quadro + deteccao + painel lateral.
     a.copyTo(d);
-
-    // Desenha a deteccao somente nos estados em que ela foi calculada.
     if (detectou) desenha_deteccao(d, mod, det);
 
-    // HUD com estado, erro de direcao, ultimo digito e numero de votos.
-    char hud[96];
-    snprintf(hud, sizeof hud, "estado=%d dirx=%d digito=%d conta=%d",
-             (int)estado, dirx, digito, nvotos);
-    putText(d, hud, Point(5, NL - 8), FONT_HERSHEY_SIMPLEX, 0.4,
-            Scalar(0, 0, 255), 1);
-
-    // Junta o quadro com o painel lateral (resultado 440x240).
     hconcat(d, painel, tela);
 
-    // Mostra a janela (somente se houver interface grafica).
-    // A imagem e' ampliada ESCALA_TELA vezes SO para visualizacao; o video
-    // gravado abaixo continua com 440x240.
     if (mostrar) {
       Mat_<COR> tela_grande;
       resize(tela, tela_grande, Size(), ESCALA_TELA, ESCALA_TELA, INTER_NEAREST);
       imshow("janela", tela_grande);
     }
 
-    // ---------------------------------------------------------------------
-    // 9) Gravacao do video de saida (opcional).
-    //
-    //   modo 'c' = grava somente a imagem crua da camera;
-    //   modo 't' = grava a tela de depuracao (quadro + painel + HUD).
-    // ---------------------------------------------------------------------
+    // Gravacao opcional ('c' = camera crua; 't' = tela com deteccao).
     if (gravar) {
       Mat saida = (modo == 'c') ? Mat(a) : Mat(tela);
       if (!vo.isOpened())
@@ -457,32 +242,19 @@ int main(int argc, char* argv[]) {
       vo << saida;
     }
 
-    // ---------------------------------------------------------------------
-    // 10) Verifica se deve terminar.
-    //
-    // ESC ou estado 4 (digito 0/1) -> envia 's' para o servidor parar os
-    // motores e encerra o laco.
-    // ---------------------------------------------------------------------
+    // ESC ou digito 0/1: manda parar e encerra.
     int ch = -1;
     if (mostrar) ch = waitKey(1) & 0xff;
 
     if (ch == 27 || estado == FIM) {
       cmd[0] = 's';
-      cmd[1] = 100;  // velocidade esquerda 0
-      cmd[2] = 100;  // velocidade direita 0
+      cmd[1] = 100;
+      cmd[2] = 100;
       client.sendBytes(3, cmd);
       break;
     }
 
-    // ---------------------------------------------------------------------
-    // 11) Envia o comando deste quadro.
-    //
-    // O servidor executa as velocidades e devolve o proximo quadro. Por isso
-    // o laco e' sincrono: um comando -> um quadro.
-    // ---------------------------------------------------------------------
-    // No modo de diagnostico, zera as velocidades para o carrinho ficar parado.
-    if (sem_motor) esq = dir = 0;
-
+    // Envia o comando do quadro.
     cmd[0] = '0';
     cmd[1] = esq + 100;
     cmd[2] = dir + 100;
