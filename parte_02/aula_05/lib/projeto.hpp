@@ -1,17 +1,3 @@
-//projeto.hpp (COPIA DO projeto.hpp DA AULA_05)
-//
-// POR QUE ESTA COPIA EXISTE:
-//   O projeto.hpp original faz "#include "raspberry.hpp"". Como esta copia
-//   esta na mesma pasta lib/, esse include encontra lib/raspberry.hpp, que e'
-//   a versao COMPLETA (com MNIST/MnistFlann). Assim o cliente6.cpp consegue
-//   usar ao mesmo tempo as classes de rede (CLIENT/SERVER) e o classificador
-//   de digitos, sem alterar o projeto.hpp original.
-//
-// O QUE O cliente6.cpp USA DAQUI:
-//   - DEVICE : sendBytes/receiveBytes, sendUint/receiveUint, sendImgComp/
-//              receiveImgComp (imagem JPEG);
-//   - CLIENT : construtor que conecta no IP do Raspberry (porta 3490);
-//   - SERVER : usado pelo servidor6.cpp no Raspberry.
 //projeto.hpp
 #include "raspberry.hpp"
 #include <unistd.h>

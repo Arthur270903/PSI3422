@@ -1,21 +1,3 @@
-//raspberry.hpp (COPIA COMPLETA, vinda de parte_02/aula_04/raspberry.hpp)
-//
-// POR QUE ESTA COPIA EXISTE:
-//   O raspberry.hpp que veio na pasta aula_05 e' a versao curta (29 linhas) e
-//   NAO tem MNIST, MnistFlann, converte, somaAbsDois nem dcReject. O placa.hpp,
-//   o fase5.cpp e o cliente6.cpp precisam da versao completa. Para nao alterar
-//   os arquivos originais (aula_05/raspberry.hpp e tudo da aula_04), a versao
-//   completa foi copiada para ca.
-//
-// FUNCOES/TIPOS DESTA COPIA USADOS PELOS NOSSOS PROGRAMAS:
-//   - erro(), timeSinceEpoch();
-//   - converte(Mat_<COR>, Mat_<FLT>&) : colorido -> cinza float 0..1;
-//   - somaAbsDois(), dcReject()       : pre-processamento dos modelos da placa;
-//   - class MNIST                     : bbox() (GRY e FLT) e le();
-//   - class MnistFlann                : train() e predictInterno() (FlaNN).
-//
-// O restante do arquivo (funcoes de desenho compativeis com Cekeikon, geracao
-// de imagens de erro etc.) foi mantido igual ao original do professor.
 //raspberry.hpp
 #include <cstdio>
 #include <cstdlib>
@@ -43,12 +25,10 @@ double timeSinceEpoch() {
 typedef uint8_t BYTE;
 typedef uint8_t GRY;
 
-//<<<<<<<<<<<<<<< A partir daqui, deve linkar com OpenCV (aula 3) <<<<<<<<<<<<<<<<<<
 #include <opencv2/opencv.hpp>
 using namespace cv;
 typedef Vec3b COR;
 
-//<<<<<<<<<<<<<<< Funcoes de compatibilidade com Cekeikon <<<<<<<<<<<<<<<<<
 inline void reta(Mat_<COR>& a, int li, int ci, int lf, int cf, COR cor={0,0,0}, int grossura=1) {
   Scalar s(cor[0],cor[1],cor[2]);
   line(a, Point(ci,li), Point(cf,lf), s, grossura);
@@ -71,7 +51,6 @@ inline void ponto(Mat_<COR>& b, int l, int c, COR cor=COR(0,0,0), int t=1)
   }
 }
 
-//<<<<<<<<<<<<<<<<<<< Definicoes da aula 4 <<<<<<<<<<<<<<<<<<<<<<<<<
 typedef float FLT;
 const double epsilon=FLT_EPSILON;
 
@@ -110,8 +89,6 @@ void converte(Mat_<COR> ent, Mat_<FLT>& sai) {
   cvtColor(temp, sai, cv::COLOR_BGR2GRAY);
 }
 
-//<<<<<<<<<<<<<<<<<<<<<< Definicoes da aula 5 <<<<<<<<<<<<<<<<<<<<<<<<<
-
 template<class T>
 void copia(Mat_<T> ent, Mat_<T>& sai, int li, int ci) {
 // Copia ent para dentro de sai a partir de sai(li,ci).
@@ -137,7 +114,6 @@ void copia(Mat_<T> ent, Mat_<T>& sai, int li, int ci) {
   }
 }
 
-//<<<<<<<<<<<< MNIST <<<<<<<<<<<<<<<<<<<<<<<
 class MNIST {
  public:
   bool localizou;
@@ -327,7 +303,6 @@ Mat_<GRY> MNIST::geraSaidaErros(int nl, int nc) {
   return e;
 }
 
-//<<<<<<<<<<<<<<<<<<< MnistFlann <<<<<<<<<<<<<<<<<<<<<<<<<<<
 class MnistFlann : public MNIST {
  public:
   using MNIST::MNIST;
@@ -340,7 +315,6 @@ class MnistFlann : public MNIST {
   void load(string nomeArq);
 };
 
-//<<<<<<<<<<<<<<<<<<< MnistFlann <<<<<<<<<<<<<<<<<<<<<<<<<<<
 void MnistFlann::train() {
   static flann::Index ind2(ax,flann::KDTreeIndexParams(4));
   ind=&ind2;

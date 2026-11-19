@@ -1,19 +1,12 @@
-//cliente6.cpp -- Licao de casa 2 da fase 5: cliente (computador).
+//cliente6.cpp 
 //
-// Conecta no servidor6 do Raspberry (porta 3490), recebe os quadros da camera,
-// localiza a placa, le o digito e executa o movimento correspondente. Toda a
-// logica fica aqui; o Raspberry so obedece aos comandos de 3 bytes:
 //   {cmd, velocidade_esq+100, velocidade_dir+100}
 //
-// COMPILAR (dentro de aula_05):
-//   g++ -O3 -fopenmp -std=c++11 client/cliente6.cpp -o client/cliente6 \
-//       $(pkg-config --cflags --libs opencv4)
+//   g++ -O3 -fopenmp -std=c++11 cliente6.cpp $(pkg-config --cflags --libs opencv4)
 //
-// EXECUTAR (dentro de aula_05, para achar assets/):
 //   ./client/cliente6 192.168.160.47 [videosaida.avi] [t/c]
 //   't' = grava a tela com deteccao + painel (padrao); 'c' = camera crua.
 //
-// Tecla ESC encerra e manda o servidor parar os motores.
 #include <omp.h>
 #include <cstdlib>
 
@@ -24,9 +17,8 @@
 // Deteccao da placa e leitura do digito.
 #include "../placa.hpp"
 
-// ---------------------------------------------------------------------------
 // Configuracao
-// ---------------------------------------------------------------------------
+// ------------
 
 constexpr int NL = 240;   // altura do quadro recebido
 constexpr int NC = 320;   // largura do quadro recebido
@@ -61,9 +53,8 @@ constexpr double T_FRENTE   = 2.5;   // passar por baixo da placa
 // Leituras antes de decidir (vale o digito mais votado).
 constexpr int VOTOS = 3;
 
-// ---------------------------------------------------------------------------
 // Maquina de estados (figura 6 do enunciado)
-// ---------------------------------------------------------------------------
+// ------------------------------------------
 enum Estado { PROCURA = 0, PARA = 1, LE_DIGITO = 2, MOVE = 3, FIM = 4, ESPERA = 5 };
 
 struct Movimento {
@@ -97,9 +88,8 @@ void segue_placa(float cx, int& esq, int& dir) {
   dir = cvRound(BASE - GANHO * erro);
 }
 
-// ---------------------------------------------------------------------------
 // Programa principal
-// ---------------------------------------------------------------------------
+// ------------------
 int main(int argc, char* argv[]) {
   if (argc < 2)
     erro("Uso: cliente6 IP [videosaida.avi] [t/c]\n"

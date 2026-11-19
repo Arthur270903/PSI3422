@@ -1,15 +1,4 @@
 //placa.hpp -- deteccao da placa e leitura do digito (fase5 e cliente6).
-//
-// Fluxo:
-//   carrega_modelos()  le quadrado.png e monta os modelos em varias escalas;
-//   detecta_placa()    CC -> 20 picos -> NCC -> melhor candidato;
-//   le_digito()        recorta o digito, ajusta o contraste, reduz para 14x14
-//                      e classifica com o FlaNN (MNIST);
-//   monta_painel()     monta o painel lateral de depuracao.
-//
-// Depende do raspberry.hpp completo (converte, dcReject, somaAbsDois, erro,
-// COR, MnistFlann). Inclua "../lib/raspberry.hpp" (ou projeto.hpp) ANTES.
-#pragma once
 #include <opencv2/opencv.hpp>
 #include <omp.h>
 #include <vector>
@@ -17,20 +6,19 @@
 #include <cmath>
 #include <algorithm>
 
-// ===========================================================================
 // Configuracao
-// ===========================================================================
+// ------------
 
 // Quantidade de modelos (tamanhos) gerados a partir de quadrado.png.
 constexpr int    NUMBER_OF_SCALES = 10;
 
-// fase5: escala 0 ou 1 = placa grande = camera perto (unico caso em que le).
+// fase5: escala 1 = placa grande => camera perto).
 constexpr int    ESCALA_PERTO     = 1;
 
 // Limiar de aceitacao do NCC para considerar a placa localizada.
 constexpr float  LIMIAR_NCC       = 0.55f;
 
-// O digito e' normalizado para 14x14, igual ao MNIST do treino.
+// O digito e' normalizado para 14x14.
 constexpr int    TAM_DIGITO       = 14;
 
 // Margem descartada na borda da janela (evita a borda branca da placa).
@@ -42,9 +30,8 @@ constexpr double CONTRASTE_MIN    = 30.0;
 // Arquivos do MNIST (train-images.idx3-ubyte etc.).
 const std::string PASTA_MNIST     = "assets/mnist";
 
-// ===========================================================================
 // Modelos
-// ===========================================================================
+// -------
 
 struct Modelos {
   std::vector<cv::Mat_<float>> m;  // um modelo por escala (dcReject + somaAbsDois)
@@ -73,7 +60,7 @@ Modelos carrega_modelos(const std::string& arquivo,
   converte(temp, T);
   mod.lado_original = T.rows;
 
-  // O miolo do quadrado e' branco puro (255,255,255); os demais brancos tem
+  // O miolo do quadrado e' branco puro (255,255,255), os demais brancos tem
   // 254 em algum canal. A mascara isola so o miolo. A componente conexa que
   // contem o centro da placa da' a janela do digito.
   cv::Mat mascara;
@@ -109,9 +96,8 @@ Modelos carrega_modelos(const std::string& arquivo,
   return mod;
 }
 
-// ===========================================================================
 // Deteccao
-// ===========================================================================
+// --------
 
 struct Deteccao {
   bool achou = false;                    // melhor NCC passou do limiar?
@@ -214,9 +200,8 @@ void desenha_deteccao(cv::Mat_<COR>& d, const Modelos& mod, const Deteccao& det)
               det.achou ? cv::Scalar(0,255,0) : cv::Scalar(0,0,255), 1);
 }
 
-// ===========================================================================
 // Preparo do digito
-// ===========================================================================
+// -----------------
 
 // Retangulo do digito no quadro atual, por regra de tres a partir da janela
 // medida no quadrado.png (401x401). Corta na borda do quadro (& de Rect).
@@ -259,9 +244,8 @@ cv::Mat_<uchar> ajusta_contraste(const cv::Mat_<uchar>& g) {
   return saida;
 }
 
-// ===========================================================================
 // Classificador
-// ===========================================================================
+// -------------
 
 // FlaNN (vizinho mais proximo com FLANN) sobre os 60000 exemplos do MNIST.
 class ClassificadorDigitos {
@@ -294,9 +278,8 @@ public:
   }
 };
 
-// ===========================================================================
 // Leitura de um quadro
-// ===========================================================================
+// --------------------
 
 struct LeituraDigito {
   int digito = -1;             // -1 = nao leu; 0..9 = leu
