@@ -58,12 +58,12 @@ constexpr int VOTOS = 3;
 // ------------------------------------------
 enum Estado
 {
-    PROCURA = 0,
-    PARA = 1,
-    LE_DIGITO = 2,
-    MOVE = 3,
-    FIM = 4,
-    ESPERA = 5
+    PROCURA = 1,
+    PARA = 2,
+    LE_DIGITO = 3,
+    MOVE = 4,
+    FIM = 5,
+    ESPERA = 6
 };
 
 struct Movimento
@@ -71,6 +71,8 @@ struct Movimento
     int esq, dir;   // velocidades -100..100
     double duracao; // segundos
 };
+
+static bool controle = 0; // 0 = manual, 1 = auto
 
 // Tabela digito -> movimento:
 //   0,1: para (fim);  2,3: 180 graus;  4,5: em frente;
@@ -80,6 +82,10 @@ Movimento movimento_do_digito(int digito)
 {
     switch (digito)
     {
+    case 0:
+    case 1:
+        controle = 0; // controle manual
+        return {0, 0, 0};
     case 2:
         return {-V_GIRO, +V_GIRO, T_GIRO_180};
     case 3:
@@ -121,6 +127,9 @@ void on_mouse(int event, int c, int l, int flags, void *userdata)
             estado_teclado = (2 - l / 160) * 3 + (c / 160) + 1; // 7 8 9 / 4 5 6 / 1 2 3
         else
             estado_teclado = 0;
+
+
+        std::clog << "Botão Apertado: " << estado_teclado << std::endl;
     }
     else if (event == EVENT_LBUTTONUP)
         estado_teclado = 0;
@@ -136,9 +145,20 @@ Mat_<COR> teclado(int est)
         int r = 2 - (d - 1) / 3, k = (d - 1) % 3;
         Point ctr(k * 80 + 40, r * 80 + 40);
         Scalar cor = (d == est) ? Scalar(0, 0, 255) : Scalar(0, 0, 120);
+
+        int baseline = 0;
+
+        if (est == 5) 
+            controle = !controle;
+
+        cv::Size textSize = cv::getTextSize(!controle ? "M" : "A", cv::FONT_HERSHEY_SIMPLEX, 1.0, 2, &baseline);
+
+        // X = margem esquerda; Y = altura total - margem inferior - baseline
+        cv::Point org(ctr.x - textSize.width/2, ctr.y + baseline);
+
         rectangle(t, Rect(k * 80, r * 80, 80, 80), Scalar(0, 0, 0), 1);
         if (d == 5)
-            circle(t, ctr, 3, cor, -1);
+            putText(t, !controle ? "M" : "A", org, FONT_HERSHEY_SIMPLEX, 1.0, cor, 2, cv::LINE_AA, false);
         else
             arrowedLine(t, ctr - Point(dx[d] * 25, dy[d] * 25), ctr + Point(dx[d] * 25, dy[d] * 25), cor, 3);
     }
@@ -199,96 +219,141 @@ int main(int argc, char *argv[])
         Deteccao det;
         LeituraDigito le;
 
-        // ESTADO 0 (PROCURA): segue a placa; se ela estiver grande, vai para PARA.
-        if (estado == PROCURA)
+        if(controle == 0)
         {
-            converte(a, f);
-            det = detecta_placa(f, mod);
-            detectou = true;
-
-            if (det.achou)
+            switch(estado_teclado) 
             {
-                int k = det.melhor;
-                if (mod.m[det.escala[k]].cols >= LADO_PERTO)
-                {
-                    estado = PARA;
-                    t0 = agora;
-                }
-                else
-                {
-                    float cx = det.pos[k].x + mod.m[det.escala[k]].cols / 2.0f;
-                    segue_placa(cx, esq, dir);
-                }
+                case 1:
+                    esq = -100;
+                    dir = -30;
+                    break;
+                case 2:
+                    esq = -100;
+                    dir = -100;
+                    break;
+                case 3:
+                    esq = -30;
+                    dir = -100;
+                    break;
+                case 4:
+                    esq = 100;
+                    dir = -100;
+                    break;
+                case 6:
+                    esq = -100;
+                    dir = 100;
+                    break;
+                case 7:
+                    esq = 100;
+                    dir = 30;
+                    break;
+                case 8:
+                    esq = 100;
+                    dir = 100;
+                    break;
+                 case 9:
+                    esq = 30;
+                    dir = 100;
+                    break;
+                default:
+                    esq = 0;
+                    dir = 0;
             }
         }
-
-        // ESTADO 1 (PARA): espera o carrinho parar e vai ler o digito.
-        else if (estado == PARA)
+        else
         {
-            if (agora - t0 >= T_PARADA)
+            // ESTADO 1 (PROCURA): segue a placa; se ela estiver grande, vai para PARA.
+            if (estado == PROCURA)
             {
-                estado = LE_DIGITO;
-                nvotos = 0;
-                std::fill(votos, votos + 10, 0);
-            }
-        }
+                converte(a, f);
+                det = detecta_placa(f, mod);
+                detectou = true;
 
-        // ESTADO 2 (LE_DIGITO): acumula VOTOS leituras e decide pelo mais votado.
-        else if (estado == LE_DIGITO)
-        {
-            converte(a, f);
-            det = detecta_placa(f, mod);
-            detectou = true;
-
-            le = le_digito(a, mod, det, clf, LADO_PERTO);
-
-            if (le.digito < 0)
-            {
-                estado = PROCURA;
-            }
-            else
-            {
-                painel = monta_painel(le.recorte, le.d14, le.digito, NL);
-                votos[le.digito]++;
-                nvotos++;
-
-                if (nvotos >= VOTOS)
+                if (det.achou)
                 {
-                    digito = (int)(std::max_element(votos, votos + 10) - votos);
-
-                    if (digito <= 1)
+                    int k = det.melhor;
+                    if (mod.m[det.escala[k]].cols >= LADO_PERTO)
                     {
-                        estado = FIM;
+                        estado = PARA;
+                        t0 = agora;
                     }
                     else
                     {
-                        mov = movimento_do_digito(digito);
-                        estado = MOVE;
-                        t0 = agora;
+                        float cx = det.pos[k].x + mod.m[det.escala[k]].cols / 2.0f;
+                        segue_placa(cx, esq, dir);
                     }
                 }
             }
-        }
 
-        // ESTADO 3 (MOVE): mantem o movimento ate o tempo terminar.
-        else if (estado == MOVE)
-        {
-            esq = mov.esq;
-            dir = mov.dir;
-
-            if (agora - t0 >= mov.duracao)
+            // ESTADO 2 (PARA): espera o carrinho parar e vai ler o digito.
+            else if (estado == PARA)
             {
-                estado = ESPERA;
-                t0 = agora;
-                esq = dir = 0;
+                if (agora - t0 >= T_PARADA)
+                {
+                    estado = LE_DIGITO;
+                    nvotos = 0;
+                    std::fill(votos, votos + 10, 0);
+                }
             }
-        }
 
-        // ESTADO 5 (ESPERA): espera a inercia e volta a procurar.
-        else if (estado == ESPERA)
-        {
-            if (agora - t0 >= T_PARADA)
-                estado = PROCURA;
+            // ESTADO 3 (LE_DIGITO): acumula VOTOS leituras e decide pelo mais votado.
+            else if (estado == LE_DIGITO)
+            {
+                converte(a, f);
+                det = detecta_placa(f, mod);
+                detectou = true;
+
+                le = le_digito(a, mod, det, clf, LADO_PERTO);
+
+                if (le.digito < 0)
+                {
+                    estado = PROCURA;
+                }
+                else
+                {
+                    painel = monta_painel(le.recorte, le.d14, le.digito, NL);
+                    votos[le.digito]++;
+                    nvotos++;
+
+                    if (nvotos >= VOTOS)
+                    {
+                        digito = (int)(std::max_element(votos, votos + 10) - votos);
+
+                        if (digito <= 1)
+                        {
+                            estado = FIM;
+                        }
+                        else
+                        {
+                            mov = movimento_do_digito(digito);
+                            estado = MOVE;
+                            t0 = agora;
+                        }
+                    }
+                }
+            }
+
+            // ESTADO 4 (MOVE): mantem o movimento ate o tempo terminar.
+            else if (estado == MOVE)
+            {
+                esq = mov.esq;
+                dir = mov.dir;
+
+                if (agora - t0 >= mov.duracao)
+                {
+                    estado = ESPERA;
+                    t0 = agora;
+                    esq = 0;
+                    dir = 0;
+                }
+            }
+
+            // ESTADO 5 (ESPERA): espera a inercia e volta a procurar.
+            else if (estado == ESPERA)
+            {
+                if (agora - t0 >= T_PARADA)
+                    estado = PROCURA;
+            }
         }
 
         // Monta a tela: quadro + deteccao + painel lateral.
