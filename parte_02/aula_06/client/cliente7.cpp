@@ -221,6 +221,8 @@ int main(int argc, char *argv[])
 
         if(controle == 0)
         {
+            estado = PROCURA;
+            
             switch(estado_teclado) 
             {
                 case 1:
