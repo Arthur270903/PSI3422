@@ -29,16 +29,10 @@ constexpr int ESCALA_TELA = 2;
 
 // Controle proporcional de centralizacao (igual ao cliente4/aula 4):
 // BASE = velocidade media; GANHO = correcao quando a placa esta fora do centro.
-constexpr int BASE = 40, GANHO = 40;
+constexpr int BASE = 40, GANHO = 25;
 
 // Sentido da curva: +1 como na aula 4; -1 inverte (fiacao dos motores trocada).
 constexpr int SENTIDO_CURVA = -1;
-
-// Modelos ampliados: 14 escalas de ~120 px (perto) a ~19 px (longe). Permite
-// chegar mais perto antes de parar para ler o digito.
-constexpr int N_ESCALAS_CLIENTE = 14;
-constexpr float ESCALA_MAX_CLIENTE = 0.30f;   // 401 * 0.30 = ~120 px
-constexpr float ESCALA_MIN_CLIENTE = 0.0473f; // ~19 px
 
 // Para e le o digito quando a placa tem pelo menos este lado em pixels.
 constexpr int LADO_PERTO = 90;
@@ -46,7 +40,7 @@ constexpr int LADO_PERTO = 90;
 // Velocidades e tempos dos movimentos (calibrar no carrinho real).
 constexpr int V_GIRO = 70;
 constexpr int V_FRENTE = 50;
-constexpr double T_PARADA = 0.8;    // espera a inercia acabar
+constexpr double T_PARADA = 1.0;    // espera a inercia acabar
 constexpr double T_GIRO_90 = 1.80;  // giro de 90 graus
 constexpr double T_GIRO_180 = 3.40; // giro de 180 graus
 constexpr double T_FRENTE = 2.5;    // passar por baixo da placa
@@ -80,25 +74,25 @@ static bool controle = 0; // 0 = manual, 1 = auto
 // Rodas em sentidos opostos giram no lugar; iguais andam reto.
 Movimento movimento_do_digito(int digito)
 {
+    std::clog << "Digito: " << digito << std::endl;
     switch (digito)
     {
     case 0:
     case 1:
-        controle = 0; // controle manual
         return {0, 0, 0};
     case 2:
-        return {-V_GIRO, +V_GIRO, T_GIRO_180};
-    case 3:
         return {+V_GIRO, -V_GIRO, T_GIRO_180};
+    case 3:
+        return {-V_GIRO, +V_GIRO, T_GIRO_180};
     case 4:
     case 5:
         return {V_FRENTE, V_FRENTE, T_FRENTE};
     case 6:
     case 7:
-        return {-V_GIRO, +V_GIRO, T_GIRO_90};
+        return {+V_GIRO, -V_GIRO, T_GIRO_90};
     case 8:
     case 9:
-        return {+V_GIRO, -V_GIRO, T_GIRO_90};
+        return {-V_GIRO, +V_GIRO, T_GIRO_90};
     }
     return {0, 0, 0};
 }
@@ -177,7 +171,7 @@ int main(int argc, char *argv[])
     char modo = (argc >= 4) ? argv[3][0] : 't';
 
     // Modelos da placa (faixa ampliada) e classificador do MNIST.
-    Modelos mod = carrega_modelos("assets/quadrado.png", N_ESCALAS_CLIENTE, ESCALA_MAX_CLIENTE, ESCALA_MIN_CLIENTE);
+    Modelos mod = carrega_modelos("assets/quadrado.png");
     ClassificadorDigitos clf(PASTA_MNIST);
 
     // Conexao com o servidor6 do Raspberry.
@@ -226,36 +220,36 @@ int main(int argc, char *argv[])
             switch(estado_teclado) 
             {
                 case 1:
-                    esq = -100;
+                    esq = -80;
                     dir = -30;
                     break;
                 case 2:
-                    esq = -100;
-                    dir = -100;
+                    esq = -80;
+                    dir = -80;
                     break;
                 case 3:
                     esq = -30;
-                    dir = -100;
+                    dir = -80;
                     break;
                 case 4:
-                    esq = 100;
-                    dir = -100;
+                    esq = 80;
+                    dir = -80;
                     break;
                 case 6:
-                    esq = -100;
-                    dir = 100;
+                    esq = -80;
+                    dir = 80;
                     break;
                 case 7:
-                    esq = 100;
+                    esq = 80;
                     dir = 30;
                     break;
                 case 8:
-                    esq = 100;
-                    dir = 100;
+                    esq = 80;
+                    dir = 80;
                     break;
                  case 9:
                     esq = 30;
-                    dir = 100;
+                    dir = 80;
                     break;
                 default:
                     esq = 0;
@@ -274,10 +268,11 @@ int main(int argc, char *argv[])
                 if (det.achou)
                 {
                     int k = det.melhor;
-                    if (mod.m[det.escala[k]].cols >= LADO_PERTO)
+                    if (det.escala[det.melhor] <= ESCALA_PERTO)
                     {
                         estado = PARA;
                         t0 = agora;
+                        std::clog << det.ncc[k] << std::endl; 
                     }
                     else
                     {
@@ -288,8 +283,8 @@ int main(int argc, char *argv[])
             }
 
             // ESTADO 2 (PARA): espera o carrinho parar e vai ler o digito.
-            else if (estado == PARA)
-            {
+            else if (estado == PARA) {
+                std::clog << "Estado: parando" << std::endl;
                 if (agora - t0 >= T_PARADA)
                 {
                     estado = LE_DIGITO;
@@ -301,12 +296,15 @@ int main(int argc, char *argv[])
             // ESTADO 3 (LE_DIGITO): acumula VOTOS leituras e decide pelo mais votado.
             else if (estado == LE_DIGITO)
             {
+                std::clog << "Estado: le digito" << std::endl;
                 converte(a, f);
                 det = detecta_placa(f, mod);
                 detectou = true;
 
-                le = le_digito(a, mod, det, clf, LADO_PERTO);
 
+                le = le_digito(a, mod, det, clf, LADO_PERTO);
+                
+                std::clog << le.digito << std::endl; 
                 if (le.digito < 0)
                 {
                     estado = PROCURA;
@@ -338,6 +336,7 @@ int main(int argc, char *argv[])
             // ESTADO 4 (MOVE): mantem o movimento ate o tempo terminar.
             else if (estado == MOVE)
             {
+                std::clog << "Estado: movendo" << std::endl;
                 esq = mov.esq;
                 dir = mov.dir;
 
@@ -353,8 +352,14 @@ int main(int argc, char *argv[])
             // ESTADO 5 (ESPERA): espera a inercia e volta a procurar.
             else if (estado == ESPERA)
             {
+
+                std::clog << "Estado: espera" << std::endl;
                 if (agora - t0 >= T_PARADA)
                     estado = PROCURA;
+            }
+            else if (estado == FIM){
+                controle = 0; // controle manual)
+                estado = PROCURA;
             }
         }
 
@@ -387,7 +392,7 @@ int main(int argc, char *argv[])
         if (mostrar)
             ch = waitKey(1) & 0xff;
 
-        if (ch == 27 || estado == FIM)
+        if (ch == 27)
         {
             cmd[0] = 's';
             cmd[1] = 100;

@@ -22,10 +22,10 @@ constexpr float  LIMIAR_NCC       = 0.55f;
 constexpr int    TAM_DIGITO       = 14;
 
 // Margem descartada na borda da janela (evita a borda branca da placa).
-constexpr int    MARGEM_JANELA    = 1;
+constexpr int    MARGEM_JANELA    = -1;
 
 // Contraste minimo (brilho fundo - brilho tinta) para aceitar que ha digito.
-constexpr double CONTRASTE_MIN    = 30.0;
+constexpr double CONTRASTE_MIN    = 15.0;
 
 // Arquivos do MNIST (train-images.idx3-ubyte etc.).
 const std::string PASTA_MNIST     = "assets/mnist";
@@ -163,8 +163,11 @@ Deteccao detecta_placa(const cv::Mat_<float>& f, const Modelos& mod) {
   for (int k = 0; k < (int)det.escala.size(); k++) {
     float v = ncc[det.escala[k]](det.pos[k].y, det.pos[k].x);
     det.ncc.push_back(v);
-    if (v > maior_ncc) maior_ncc = v;
-    det.melhor = k;   // mantem o ultimo candidato (igual ao fase3p)
+    if (v > maior_ncc) 
+    {
+      maior_ncc = v;
+      det.melhor = k;   // mantem o ultimo candidato (igual ao fase3p)
+    }
   }
 
   det.achou = (det.melhor >= 0 && maior_ncc > LIMIAR_NCC);
@@ -173,15 +176,15 @@ Deteccao detecta_placa(const cv::Mat_<float>& f, const Modelos& mod) {
 
 // Candidatos em azul, melhor candidato em amarelo, textos de escala/CC/NCC.
 void desenha_deteccao(cv::Mat_<COR>& d, const Modelos& mod, const Deteccao& det) {
-  for (int k = 0; k < (int)det.escala.size(); k++)
-    cv::rectangle(d, cv::Rect(det.pos[k].x, det.pos[k].y,
-                              mod.m[det.escala[k]].cols, mod.m[det.escala[k]].rows),
-                  cv::Scalar(255,0,0), 1);
+  //for (int k = 0; k < (int)det.escala.size(); k++)
+  //  cv::rectangle(d, cv::Rect(det.pos[k].x, det.pos[k].y,
+  //                            mod.m[det.escala[k]].cols, mod.m[det.escala[k]].rows),
+  //                cv::Scalar(255,0,0), 1);
 
   if (det.melhor >= 0) {
     int k = det.melhor;
 
-    if (det.achou)
+    //if (det.achou)
       cv::rectangle(d, cv::Rect(det.pos[k].x, det.pos[k].y,
                                 mod.m[det.escala[k]].cols, mod.m[det.escala[k]].rows),
                     cv::Scalar(0,255,255), 2);
@@ -293,11 +296,14 @@ LeituraDigito le_digito(const cv::Mat_<COR>& a, const Modelos& mod,
                         const Deteccao& det, ClassificadorDigitos& clf,
                         int lado_minimo = -1) {
   LeituraDigito r;
-
-  if (!det.achou) return r;
+  std::clog << "!det.achou " << (!det.achou) << std::endl;
+  if (!det.achou) 
+    return r;
   int k = det.melhor;
+  
   if (lado_minimo > 0) {
-    if (mod.m[det.escala[k]].cols < lado_minimo) return r;
+    //if (mod.m[det.escala[k]].cols < lado_minimo) 
+    //  return r;
   } else {
     if (det.escala[k] > ESCALA_PERTO) return r;
   }
@@ -324,6 +330,7 @@ LeituraDigito le_digito(const cv::Mat_<COR>& a, const Modelos& mod,
 
   // 4d) FlaNN.
   r.digito = clf.classifica(b);
+  std::clog << "Leu digito: " << r.digito << std::endl;
   return r;
 }
 
